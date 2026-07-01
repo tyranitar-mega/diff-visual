@@ -617,7 +617,8 @@ def main():
         description="Generate GitHub-style HTML diff from a git diff or commit."
     )
     parser.add_argument("repo", help="Path to git repository")
-    parser.add_argument("source", help="Diff file path, commit hash, or '--stdin'")
+    parser.add_argument("source", nargs="?", default=None,
+                        help="Diff file path, commit hash, or '--stdin'")
     parser.add_argument("-o", "--output", default="diff.html",
                         help="Output HTML file (default: diff.html)")
     parser.add_argument("--stdin", action="store_true",
@@ -632,6 +633,7 @@ def main():
 
     # Check if repo is a git repo
     git_dir = os.path.join(repo_dir, ".git")
+    is_git = os.path.isdir(git_dir) or os.path.isfile(git_dir)
 
     # Determine diff source
     commit_info = None
@@ -639,11 +641,18 @@ def main():
 
     if args.stdin:
         diff_text = sys.stdin.read()
+    elif args.source is None:
+        # No source given: use latest commit
+        if not is_git:
+            print("Error: not a valid git repo", file=sys.stderr)
+            sys.exit(1)
+        diff_text = get_diff_from_commit(repo_dir, "HEAD")
+        commit_info = get_commit_info(repo_dir, "HEAD")
     elif os.path.isfile(args.source):
         diff_text = read_diff_from_file(args.source)
     else:
         # Treat as commit hash
-        if os.path.isdir(git_dir) or os.path.isfile(git_dir):
+        if is_git:
             diff_text = get_diff_from_commit(repo_dir, args.source)
             commit_info = get_commit_info(repo_dir, args.source)
         else:
