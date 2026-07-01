@@ -29,9 +29,10 @@ git diff HEAD~3 HEAD | python diff2html.py <repo-dir> --stdin -o output.html
 - **File-based view** — each changed file is a collapsible `<details>` panel
 - **File list** — summary of all changed files with add/del counts; click to jump
 - **Expand / collapse all** — toggle all files at once
+- **Syntax highlighting** — source code in diffs is highlighted via `pygments` (auto-detected from file extension), with GitHub-dark-compatible token colors
 - **GitHub-style dark theme** — inline CSS, no external dependencies
 - **Commit metadata** — when using a commit hash, shows title, author, date
-- **No external dependencies** — pure Python standard library
+- **No external runtime dependencies** — pure Python standard library; `pygments` is optional but recommended
 
 ## Example
 

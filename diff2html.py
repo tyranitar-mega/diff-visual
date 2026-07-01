@@ -16,6 +16,15 @@ import sys
 from html import escape
 from pathlib import Path
 
+try:
+    from pygments import lex
+    from pygments.lexers import get_lexer_for_filename
+    from pygments.lexers.special import TextLexer
+    from pygments.token import Token
+    HAS_PYGMENTS = True
+except ImportError:
+    HAS_PYGMENTS = False
+
 
 # ---------------------------------------------------------------------------
 # Diff parsing
@@ -245,16 +254,123 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .stats-summary { display: flex; align-items: center; padding: 8px 16px; background: #1c2128; border-bottom: 1px solid #30363d; font-size: 12px; color: #8b949e; flex-wrap: wrap; gap: 4px 16px; }
 .stats-summary .additions { color: #3fb950; }
 .stats-summary .deletions { color: #f85149; }
+
+/* Syntax highlight token colours */
+{token_css}
 """
+
+
+# ---------------------------------------------------------------------------
+# Syntax highlighting (via pygments)
+# ---------------------------------------------------------------------------
+
+TOKEN_COLORS: dict = {}
+if HAS_PYGMENTS:
+    TOKEN_COLORS = {
+        Token.Keyword:            "#ff7b72",
+        Token.Keyword.Constant:   "#ff7b72",
+        Token.Keyword.Declaration: "#ff7b72",
+        Token.Keyword.Namespace:  "#ff7b72",
+        Token.Keyword.Pseudo:     "#ff7b72",
+        Token.Keyword.Reserved:   "#ff7b72",
+        Token.Keyword.Type:       "#ff7b72",
+        Token.Name.Builtin:       "#ffa657",
+        Token.Name.Builtin.Pseudo: "#ffa657",
+        Token.Name.Class:         "#d2a8ff",
+        Token.Name.Decorator:     "#d2a8ff",
+        Token.Name.Entity:        "#d2a8ff",
+        Token.Name.Exception:     "#ff7b72",
+        Token.Name.Function:      "#d2a8ff",
+        Token.Name.Label:         "#ff7b72",
+        Token.Name.Namespace:     "#d2a8ff",
+        Token.Name.Tag:           "#7ee787",
+        Token.Name.Variable:      "#ffa657",
+        Token.String:             "#a5d6ff",
+        Token.String.Char:        "#a5d6ff",
+        Token.String.Doc:         "#a5d6ff",
+        Token.String.Double:      "#a5d6ff",
+        Token.String.Escape:      "#a5d6ff",
+        Token.String.Heredoc:     "#a5d6ff",
+        Token.String.Interpol:    "#a5d6ff",
+        Token.String.Other:       "#a5d6ff",
+        Token.String.Single:      "#a5d6ff",
+        Token.Number:             "#79c0ff",
+        Token.Number.Bin:         "#79c0ff",
+        Token.Number.Float:       "#79c0ff",
+        Token.Number.Hex:         "#79c0ff",
+        Token.Number.Integer:     "#79c0ff",
+        Token.Number.Oct:         "#79c0ff",
+        Token.Comment:            "#8b949e",
+        Token.Comment.Hashbang:   "#8b949e",
+        Token.Comment.Multiline:  "#8b949e",
+        Token.Comment.Preproc:    "#8b949e",
+        Token.Comment.Single:     "#8b949e",
+        Token.Comment.Special:    "#8b949e",
+        Token.Operator:           "#ff7b72",
+        Token.Operator.Word:      "#ff7b72",
+        Token.Punctuation:        "#e6edf3",
+        Token.Generic.Deleted:    "#ffa198",
+        Token.Generic.Inserted:   "#3fb950",
+        Token.Generic.Emph:       "#e6edf3",
+    }
+
+    def _token_css() -> str:
+        lines = []
+        seen = set()
+        for ttype, color in TOKEN_COLORS.items():
+            cls = token_cls(ttype)
+            if cls in seen:
+                continue
+            seen.add(cls)
+            lines.append(f".{cls} {{ color: {color}; }}")
+        return "\n".join(lines)
+
+    def token_cls(ttype) -> str:
+        return "tok-" + str(ttype).replace(".", "-").replace(" ", "").lower().lstrip("token")
+
+    def get_lexer(path: str):
+        try:
+            return get_lexer_for_filename(path, stripnl=False, ensurenl=False)
+        except Exception:
+            return TextLexer(stripnl=False, ensurenl=False)
+
+    _LEXER_CACHE: dict[str, object] = {}
+
+    def get_cached_lexer(path: str):
+        if path not in _LEXER_CACHE:
+            _LEXER_CACHE[path] = get_lexer(path)
+        return _LEXER_CACHE[path]
+
+    def highlight_line(text: str, path: str) -> str:
+        lexer = get_cached_lexer(path)
+        parts = []
+        for ttype, value in lex(text, lexer):
+            cls = token_cls(ttype)
+            if cls and cls in _TOKEN_CLASSES_SET:
+                parts.append(f'<span class="{cls}">{escape(value)}</span>')
+            else:
+                parts.append(escape(value))
+        return "".join(parts)
+
+    # Pre-compute set of known token classes
+    _TOKEN_CLASSES_SET: set[str] = set()
+    for ttype in TOKEN_COLORS:
+        _TOKEN_CLASSES_SET.add(token_cls(ttype))
+
+    SYNTAX_CSS = _token_css()
+else:
+    SYNTAX_CSS = ""
+
+    def highlight_line(text: str, path: str) -> str:
+        return escape(text)
 
 
 def status_char(s: str) -> str:
     return {"added": "A", "deleted": "D", "modified": "M", "renamed": "R", "copied": "C"}.get(s, "?")
 
 
-def render_hunk(hunk: Hunk) -> str:
+def render_hunk(hunk: Hunk, path: str = "") -> str:
     rows = []
-    # hunk header row
     header_text = f"@@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@"
     if hunk.header:
         header_text += f" {escape(hunk.header)}"
@@ -270,8 +386,10 @@ def render_hunk(hunk: Hunk) -> str:
         old_ln_str = str(dl.old_ln) if dl.old_ln > 0 else ""
         new_ln_str = str(dl.new_ln) if dl.new_ln > 0 else ""
         kind_sym = dl.kind if dl.kind in ("+", "-", " ") else " "
-        content = escape(dl.content)
-        # syntax highlight inline (basic: detect comments, strings)
+        if HAS_PYGMENTS and dl.kind in ("+", "-", " "):
+            content = highlight_line(dl.content, path)
+        else:
+            content = escape(dl.content)
         rows.append(
             f'<tr class="{cls}">'
             f'<td class="ln ln-old">{old_ln_str}</td>'
@@ -327,7 +445,7 @@ def render_file(df: DiffFile, repo_dir: str, open_by_default: bool = False) -> s
     )
     parts.append('<table class="diff-table">')
     for hunk in df.hunks:
-        parts.append(render_hunk(hunk))
+        parts.append(render_hunk(hunk, title))
     parts.append('</table>')
     parts.append('</details>')
     return "\n".join(parts)
@@ -425,7 +543,7 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{escape(os.path.basename(repo_dir or "diff"))} — Diff</title>
-<style>{CSS}</style>
+<style>{CSS.replace("{token_css}", SYNTAX_CSS)}</style>
 </head>
 <body>
 <div class="container">
