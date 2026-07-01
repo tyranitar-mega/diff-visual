@@ -226,6 +226,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .diff-file-header .file-status { margin-right: 8px; }
 .diff-file-header .file-path { flex: 1; }
 .diff-file-header .file-stats { margin-left: 8px; }
+.diff-file-header .copy-btn { background: none; border: 1px solid #30363d; color: #8b949e; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 1px 6px; margin-left: 8px; font-family: inherit; }
+.diff-file-header .copy-btn:hover { background: #30363d; color: #e6edf3; }
+.diff-file-header .copy-btn.copied { border-color: #3fb950; color: #3fb950; }
 .diff-binary { padding: 24px; text-align: center; color: #8b949e; font-size: 14px; }
 
 /* Unified diff table */
@@ -412,7 +415,8 @@ def render_file(df: DiffFile, repo_dir: str, open_by_default: bool = False) -> s
         parts.append(
             f'<summary class="diff-file-header">'
             f'<span class="file-status file-status-{status}">{status}</span>'
-            f'<span class="file-path">{escape(df.new_path)}</span>'
+            f'<span class="file-path">{escape(title)}</span>'
+            f'<button class="copy-btn" data-path="{escape(title)}" onclick="event.stopPropagation();copyPath(this)">copy</button>'
             f'</summary>'
             f'<div class="diff-binary">Binary file not shown.</div>'
             f'</details>'
@@ -441,6 +445,7 @@ def render_file(df: DiffFile, repo_dir: str, open_by_default: bool = False) -> s
         f'<span class="file-status file-status-{status}">{status}</span>'
         f'<span class="file-path">{escape(path_label)}</span>'
         f'<span class="file-stats">{stats}</span>'
+        f'<button class="copy-btn" data-path="{escape(title)}" onclick="event.stopPropagation();copyPath(this)">copy</button>'
         f'</summary>'
     )
     parts.append('<table class="diff-table">')
@@ -468,6 +473,31 @@ document.addEventListener('click', function(e) {
     setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   }
 });
+function copyPath(btn) {
+  var path = btn.getAttribute('data-path');
+  navigator.clipboard.writeText(path).then(function() {
+    btn.classList.add('copied');
+    btn.textContent = 'copied!';
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      btn.textContent = 'copy';
+    }, 1500);
+  }).catch(function() {
+    // fallback
+    var ta = document.createElement('textarea');
+    ta.value = path;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.classList.add('copied');
+    btn.textContent = 'copied!';
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      btn.textContent = 'copy';
+    }, 1500);
+  });
+}
 """
 
 def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict | None = None) -> str:
