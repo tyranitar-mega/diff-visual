@@ -646,7 +646,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate GitHub-style HTML diff from a git diff or commit."
     )
-    parser.add_argument("repo", help="Path to git repository")
+    parser.add_argument("repo", nargs="?", default=".",
+                        help="Path to git repository (default: current directory)")
     parser.add_argument("source", nargs="?", default=None,
                         help="Diff file path, commit hash, or '--stdin'")
     parser.add_argument("-o", "--output", default="diff.html",
