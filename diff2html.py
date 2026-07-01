@@ -664,7 +664,28 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"Diff HTML written to {args.output}")
+    out_path = os.path.abspath(args.output)
+    print(f"Diff HTML written to {out_path}")
+
+    # WSL2: print Windows-accessible file:// URL for browser
+    if os.path.exists("/proc/version"):
+        with open("/proc/version") as f:
+            version_data = f.read().lower()
+        if "microsoft" in version_data or "wsl" in version_data:
+            distro = ""
+            try:
+                with open("/etc/os-release") as f:
+                    for line in f:
+                        if line.startswith("WSL_DISTRO_NAME="):
+                            distro = line.strip().split("=", 1)[1].strip('"')
+                            break
+            except Exception:
+                pass
+            if not distro:
+                distro = os.environ.get("WSL_DISTRO_NAME", "Ubuntu")
+            url = f"file://wsl$/{distro}/{out_path.lstrip('/')}"
+            print(f"  Paste in Windows browser: {url}")
+
     print(f"  Files changed: {len(files)}")
     total_add = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "+")
     total_del = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "-")
