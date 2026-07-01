@@ -219,7 +219,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 /* Collapsible file */
 .diff-file { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
 .diff-file[open] { border-radius: 6px; }
-.diff-file-header { display: flex; align-items: center; padding: 8px 16px; background: #1c2128; font-size: 14px; font-family: monospace; cursor: pointer; user-select: none; }
+.diff-file-header { display: flex; align-items: center; padding: 8px 16px; background: #1c2128; font-size: 14px; font-family: Consolas, "Courier New", monospace; cursor: pointer; user-select: none; }
 .diff-file-header::-webkit-details-marker { display: none; }
 .diff-file-header::before { content: "\\25B6"; color: #8b949e; font-size: 10px; margin-right: 8px; transition: transform .15s; }
 .diff-file[open] > .diff-file-header::before { transform: rotate(90deg); }
@@ -229,7 +229,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .diff-binary { padding: 24px; text-align: center; color: #8b949e; font-size: 14px; }
 
 /* Unified diff table */
-.diff-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; line-height: 20px; }
+.diff-table { width: 100%; border-collapse: collapse; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 20px; }
 .diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; }
 .diff-table .ln { width: 50px; text-align: right; padding-right: 8px; color: #484f58; user-select: none; }
 .diff-table .ln-old { border-right: 1px solid #30363d; }
