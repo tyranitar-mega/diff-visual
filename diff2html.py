@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+"""
+diff2html - Generate GitHub-style HTML diff from a git diff file or commit.
+
+Usage:
+  python diff2html.py <repo-dir> <diff-file> [-o output.html]
+  python diff2html.py <repo-dir> <commit-hash> [-o output.html]
+  python diff2html.py <repo-dir> --stdin [-o output.html]
+"""
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from html import escape
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Diff parsing
+# ---------------------------------------------------------------------------
+
+class DiffFile:
+    def __init__(self):
+        self.old_path = ""
+        self.new_path = ""
+        self.status = "modified"  # added | deleted | modified | renamed | copied
+        self.similarity = 100
+        self.binary = False
+        self.hunks: list[Hunk] = []
+
+
+class Hunk:
+    def __init__(self, old_start: int, old_count: int, new_start: int, new_count: int, header: str = ""):
+        self.old_start = old_start
+        self.old_count = old_count
+        self.new_start = new_start
+        self.new_count = new_count
+        self.header = header
+        self.lines: list[DiffLine] = []
+
+
+class DiffLine:
+    def __init__(self, kind: str, content: str, old_ln: int = 0, new_ln: int = 0):
+        # kind: ' ', '-', '+', or '\' (for no newline messages)
+        self.kind = kind
+        self.content = content
+        self.old_ln = old_ln
+        self.new_ln = new_ln
+
+
+def _finalize_hunk(f: DiffFile, h: Hunk | None) -> Hunk | None:
+    """Append current hunk to file and return None."""
+    if h is not None:
+        f.hunks.append(h)
+    return None
+
+
+def _finalize_file(files: list[DiffFile], f: DiffFile | None, h: Hunk | None
+                   ) -> tuple[DiffFile | None, Hunk | None]:
+    """Finalize hunk and file, appending to list if it has changes."""
+    if f is None:
+        return None, None
+    h = _finalize_hunk(f, h)
+    if f.hunks or f.binary:
+        files.append(f)
+    return None, None
+
+
+def parse_diff(text: str) -> list[DiffFile]:
+    files: list[DiffFile] = []
+    current_file: DiffFile | None = None
+    current_hunk: Hunk | None = None
+    old_ln = 0
+    new_ln = 0
+
+    for raw_line in text.splitlines():
+        line = raw_line
+
+        # --- File header ---
+        if line.startswith("diff --git "):
+            current_file, current_hunk = _finalize_file(files, current_file, current_hunk)
+            current_file = DiffFile()
+            in_git_diff = True
+            parts = line.split()
+            if len(parts) >= 4:
+                current_file.old_path = parts[2][2:]
+                current_file.new_path = parts[3][2:]
+            continue
+
+        if current_file is None:
+            continue
+
+        if line.startswith("index "):
+            continue
+
+        if line.startswith("new file mode "):
+            current_file.status = "added"
+            continue
+
+        if line.startswith("deleted file mode "):
+            current_file.status = "deleted"
+            continue
+
+        if line.startswith("rename from "):
+            current_file.status = "renamed"
+            current_file.old_path = line[len("rename from "):]
+            continue
+        if line.startswith("rename to "):
+            current_file.new_path = line[len("rename to "):]
+            continue
+
+        m = re.match(r"similarity index (\d+)%", line)
+        if m:
+            current_file.similarity = int(m.group(1))
+            continue
+
+        if line.startswith("Binary files ") and "differ" in line:
+            current_file.binary = True
+            continue
+
+        if line.startswith("--- "):
+            path = line[4:]
+            if path != "/dev/null":
+                current_file.old_path = path[2:] if path.startswith("a/") else path
+            continue
+        if line.startswith("+++ "):
+            path = line[4:]
+            if path != "/dev/null":
+                current_file.new_path = path[2:] if path.startswith("b/") else path
+            continue
+
+        # --- Hunk header ---
+        m = re.match(r"^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@(.*)", line)
+        if m:
+            current_hunk = _finalize_hunk(current_file, current_hunk)
+            old_s = int(m.group(1))
+            old_c = int(m.group(2)) if m.group(2) else 1
+            new_s = int(m.group(3))
+            new_c = int(m.group(4)) if m.group(4) else 1
+            current_hunk = Hunk(old_s, old_c, new_s, new_c, m.group(5).strip())
+            old_ln = old_s
+            new_ln = new_s
+            continue
+
+        if current_hunk is None:
+            continue
+
+        if line.startswith("\\ "):
+            current_hunk.lines.append(DiffLine("\\", line[1:]))
+            continue
+
+        if line.startswith("+"):
+            dl = DiffLine("+", line[1:], old_ln=0, new_ln=new_ln)
+            current_hunk.lines.append(dl)
+            new_ln += 1
+        elif line.startswith("-"):
+            dl = DiffLine("-", line[1:], old_ln=old_ln, new_ln=0)
+            current_hunk.lines.append(dl)
+            old_ln += 1
+        elif line.startswith(" "):
+            dl = DiffLine(" ", line[1:], old_ln=old_ln, new_ln=new_ln)
+            current_hunk.lines.append(dl)
+            old_ln += 1
+            new_ln += 1
+
+    # Finalize last file
+    _finalize_file(files, current_file, current_hunk)
+
+    return files
+
+
+# ---------------------------------------------------------------------------
+# HTML generation
+# ---------------------------------------------------------------------------
+
+CSS = """\
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #0d1117; color: #e6edf3; padding: 20px; }
+.container { max-width: 1280px; margin: 0 auto; }
+
+/* Header */
+.commit-header { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+.commit-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.commit-meta { font-size: 12px; color: #8b949e; }
+.commit-meta span { margin-right: 16px; }
+
+/* File list */
+.file-list { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+.file-list-item { display: flex; align-items: center; padding: 8px 16px; border-bottom: 1px solid #21262d; text-decoration: none; color: #e6edf3; font-size: 14px; }
+.file-list-item:last-child { border-bottom: none; }
+.file-list-item:hover { background: #1c2128; }
+.file-status { display: inline-block; width: 20px; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; font-size: 11px; font-weight: 600; margin-right: 8px; flex-shrink: 0; }
+.file-status-A { background: #238636; color: #fff; }
+.file-status-M { background: #9e6a03; color: #fff; }
+.file-status-D { background: #da3633; color: #fff; }
+.file-status-R { background: #1f6feb; color: #fff; }
+.file-path { flex: 1; }
+.file-stats { font-size: 12px; }
+.add-stat { color: #3fb950; margin-right: 4px; }
+.del-stat { color: #f85149; }
+
+/* Toggle all */
+.toggle-all { margin-left: auto; font-size: 12px; }
+.toggle-all a { color: #58a6ff; cursor: pointer; text-decoration: none; }
+.toggle-all a:hover { text-decoration: underline; }
+.toggle-all .sep { color: #30363d; margin: 0 6px; }
+
+/* Collapsible file */
+.diff-file { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+.diff-file[open] { border-radius: 6px; }
+.diff-file-header { display: flex; align-items: center; padding: 8px 16px; background: #1c2128; font-size: 14px; font-family: monospace; cursor: pointer; user-select: none; }
+.diff-file-header::-webkit-details-marker { display: none; }
+.diff-file-header::before { content: "\\25B6"; color: #8b949e; font-size: 10px; margin-right: 8px; transition: transform .15s; }
+.diff-file[open] > .diff-file-header::before { transform: rotate(90deg); }
+.diff-file-header .file-status { margin-right: 8px; }
+.diff-file-header .file-path { flex: 1; }
+.diff-file-header .file-stats { margin-left: 8px; }
+.diff-binary { padding: 24px; text-align: center; color: #8b949e; font-size: 14px; }
+
+/* Unified diff table */
+.diff-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; line-height: 20px; }
+.diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; }
+.diff-table .ln { width: 50px; text-align: right; padding-right: 8px; color: #484f58; user-select: none; }
+.diff-table .ln-old { border-right: 1px solid #30363d; }
+.diff-table .ln-new { border-right: 1px solid #30363d; }
+.diff-table .kind { width: 16px; text-align: center; padding: 0; user-select: none; color: #484f58; }
+.diff-table .content { padding-left: 8px; }
+
+/* Line colours */
+.line-add { background: #12261d; }
+.line-add .ln-old { background: #0d1117; }
+.line-add .ln-new { background: #12261d; }
+.line-add .content { background: #12261d; }
+.line-del { background: #28171a; }
+.line-del .ln-old { background: #28171a; }
+.line-del .ln-new { background: #0d1117; }
+.line-del .content { background: #28171a; }
+.line-ctx { background: #0d1117; }
+.line-hunk-header { background: #0d1117; }
+.line-hunk-header td { color: #8b949e; padding: 4px 8px; font-weight: 500; }
+
+/* File diff stats summary */
+.stats-summary { display: flex; align-items: center; padding: 8px 16px; background: #1c2128; border-bottom: 1px solid #30363d; font-size: 12px; color: #8b949e; flex-wrap: wrap; gap: 4px 16px; }
+.stats-summary .additions { color: #3fb950; }
+.stats-summary .deletions { color: #f85149; }
+"""
+
+
+def status_char(s: str) -> str:
+    return {"added": "A", "deleted": "D", "modified": "M", "renamed": "R", "copied": "C"}.get(s, "?")
+
+
+def render_hunk(hunk: Hunk) -> str:
+    rows = []
+    # hunk header row
+    header_text = f"@@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@"
+    if hunk.header:
+        header_text += f" {escape(hunk.header)}"
+    rows.append(
+        f'<tr class="line-hunk-header"><td class="ln ln-old"></td>'
+        f'<td class="ln ln-new"></td>'
+        f'<td class="kind"></td>'
+        f'<td class="content" colspan="2">{escape(header_text)}</td></tr>'
+    )
+
+    for dl in hunk.lines:
+        cls = {" ": "line-ctx", "+": "line-add", "-": "line-del", "\\": "line-ctx"}.get(dl.kind, "line-ctx")
+        old_ln_str = str(dl.old_ln) if dl.old_ln > 0 else ""
+        new_ln_str = str(dl.new_ln) if dl.new_ln > 0 else ""
+        kind_sym = dl.kind if dl.kind in ("+", "-", " ") else " "
+        content = escape(dl.content)
+        # syntax highlight inline (basic: detect comments, strings)
+        rows.append(
+            f'<tr class="{cls}">'
+            f'<td class="ln ln-old">{old_ln_str}</td>'
+            f'<td class="ln ln-new">{new_ln_str}</td>'
+            f'<td class="kind">{kind_sym}</td>'
+            f'<td class="content">{content}</td>'
+            f'</tr>'
+        )
+    return "\n".join(rows)
+
+
+def render_file(df: DiffFile, repo_dir: str, open_by_default: bool = False) -> str:
+    title = df.new_path if df.new_path else df.old_path
+    status = status_char(df.status)
+    anchor = title.replace("\\", "/")
+
+    parts = []
+    if df.binary:
+        parts.append(f'<details class="diff-file" id="{escape(anchor)}"{" open" if open_by_default else ""}>')
+        parts.append(
+            f'<summary class="diff-file-header">'
+            f'<span class="file-status file-status-{status}">{status}</span>'
+            f'<span class="file-path">{escape(df.new_path)}</span>'
+            f'</summary>'
+            f'<div class="diff-binary">Binary file not shown.</div>'
+            f'</details>'
+        )
+        return "\n".join(parts)
+
+    add_count = sum(1 for h in df.hunks for l in h.lines if l.kind == "+")
+    del_count = sum(1 for h in df.hunks for l in h.lines if l.kind == "-")
+
+    stats = ""
+    if add_count or del_count:
+        stats_parts = []
+        if add_count:
+            stats_parts.append(f'<span class="add-stat">+{add_count}</span>')
+        if del_count:
+            stats_parts.append(f'<span class="del-stat">−{del_count}</span>')
+        stats = " ".join(stats_parts)
+
+    path_label = title
+    if df.status == "renamed":
+        path_label = f"{df.old_path} → {df.new_path}"
+
+    parts.append(f'<details class="diff-file" id="{escape(anchor)}"{" open" if open_by_default else ""}>')
+    parts.append(
+        f'<summary class="diff-file-header">'
+        f'<span class="file-status file-status-{status}">{status}</span>'
+        f'<span class="file-path">{escape(path_label)}</span>'
+        f'<span class="file-stats">{stats}</span>'
+        f'</summary>'
+    )
+    parts.append('<table class="diff-table">')
+    for hunk in df.hunks:
+        parts.append(render_hunk(hunk))
+    parts.append('</table>')
+    parts.append('</details>')
+    return "\n".join(parts)
+
+
+JS = """\
+function toggleAll(expand) {
+  document.querySelectorAll('.diff-file').forEach(function(d) {
+    if (expand) d.setAttribute('open', ''); else d.removeAttribute('open');
+  });
+}
+document.addEventListener('click', function(e) {
+  var link = e.target.closest('.file-list-item');
+  if (!link) return;
+  var href = link.getAttribute('href');
+  if (!href || !href.startsWith('#')) return;
+  var target = document.getElementById(href.slice(1));
+  if (target && target.tagName === 'DETAILS') {
+    target.setAttribute('open', '');
+    setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+  }
+});
+"""
+
+def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict | None = None) -> str:
+    total_add = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "+")
+    total_del = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "-")
+
+    # Build file list
+    file_list_rows = []
+    for df in files:
+        status = status_char(df.status)
+        path = df.new_path if df.new_path else df.old_path
+        anchor = path.replace("\\", "/")
+        label = path
+        if df.status == "renamed":
+            label = f"{df.old_path} → {df.new_path}"
+        add_c = sum(1 for h in df.hunks for l in h.lines if l.kind == "+")
+        del_c = sum(1 for h in df.hunks for l in h.lines if l.kind == "-")
+        stats = ""
+        if add_c or del_c:
+            sp = []
+            if add_c:
+                sp.append(f'<span class="add-stat">+{add_c}</span>')
+            if del_c:
+                sp.append(f'<span class="del-stat">-{del_c}</span>')
+            stats = " ".join(sp)
+        file_list_rows.append(
+            f'<a class="file-list-item" href="#{escape(anchor)}">'
+            f'<span class="file-status file-status-{status}">{status}</span>'
+            f'<span class="file-path">{escape(label)}</span>'
+            f'<span class="file-stats">{stats}</span>'
+            f'</a>'
+        )
+
+    # Commit header
+    commit_html = ""
+    if commit_info:
+        commit_html = f"""\
+<div class="commit-header">
+  <div class="commit-title">{escape(commit_info.get("title", ""))}</div>
+  <div class="commit-meta">
+    <span>commit {commit_info.get("hash", "")}</span>
+    <span>author: {escape(commit_info.get("author", ""))}</span>
+    <span>date: {commit_info.get("date", "")}</span>
+  </div>
+</div>"""
+
+    toggle_links = '<span class="toggle-all"><a onclick="toggleAll(true)">expand all</a><span class="sep">|</span><a onclick="toggleAll(false)">collapse all</a></span>'
+
+    stats_line = ""
+    if len(files) or total_add or total_del:
+        sp = []
+        sp.append(f'<span class="changed-files">{len(files)} file{"s" if len(files) != 1 else ""} changed</span>')
+        if total_add:
+            sp.append(f'<span class="additions">+{total_add} additions</span>')
+        if total_del:
+            sp.append(f'<span class="deletions">-{total_del} deletions</span>')
+        stats_line = f'<div class="stats-summary">{" &nbsp;|&nbsp; ".join(sp)}{toggle_links}</div>'
+
+    file_list_html = ""
+    if file_list_rows:
+        file_list_html = f"""\
+<div class="file-list">
+  {stats_line}
+  {''.join(file_list_rows)}
+</div>"""
+
+    diff_html = "\n".join(render_file(df, repo_dir) for df in files)
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{escape(os.path.basename(repo_dir or "diff"))} — Diff</title>
+<style>{CSS}</style>
+</head>
+<body>
+<div class="container">
+{commit_html}
+{file_list_html}
+{diff_html}
+</div>
+<script>{JS}</script>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Git helpers
+# ---------------------------------------------------------------------------
+
+def get_diff_from_commit(repo_dir: str, commit: str) -> str:
+    """Get diff for a commit (compared to parent)."""
+    # Check if it's a commit hash or ref
+    try:
+        # For merge commits, show diff against first parent
+        result = subprocess.run(
+            ["git", "diff", f"{commit}^..{commit}"],
+            capture_output=True, text=True, cwd=repo_dir
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout
+
+        # Fallback: maybe it's the initial commit
+        result = subprocess.run(
+            ["git", "show", "--format=format:%b", commit],
+            capture_output=True, text=True, cwd=repo_dir
+        )
+        return result.stdout
+    except Exception as e:
+        print(f"Error getting diff: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def get_commit_info(repo_dir: str, commit: str) -> dict:
+    """Get commit metadata."""
+    info = {}
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%H|%an|%ai|%s", commit],
+            capture_output=True, text=True, cwd=repo_dir
+        )
+        if result.returncode == 0:
+            parts = result.stdout.strip().split("|", 3)
+            if len(parts) >= 4:
+                info["hash"] = parts[0]
+                info["author"] = parts[1]
+                info["date"] = parts[2]
+                info["title"] = parts[3]
+    except Exception:
+        pass
+    return info
+
+
+def read_diff_from_file(path: str) -> str:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate GitHub-style HTML diff from a git diff or commit."
+    )
+    parser.add_argument("repo", help="Path to git repository")
+    parser.add_argument("source", help="Diff file path, commit hash, or '--stdin'")
+    parser.add_argument("-o", "--output", default="diff.html",
+                        help="Output HTML file (default: diff.html)")
+    parser.add_argument("--stdin", action="store_true",
+                        help="Read diff from stdin (use instead of source)")
+
+    args = parser.parse_args()
+    repo_dir = os.path.abspath(args.repo)
+
+    if not os.path.isdir(repo_dir):
+        print(f"Error: not a directory: {repo_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    # Check if repo is a git repo
+    git_dir = os.path.join(repo_dir, ".git")
+
+    # Determine diff source
+    commit_info = None
+    diff_text = None
+
+    if args.stdin:
+        diff_text = sys.stdin.read()
+    elif os.path.isfile(args.source):
+        diff_text = read_diff_from_file(args.source)
+    else:
+        # Treat as commit hash
+        if os.path.isdir(git_dir) or os.path.isfile(git_dir):
+            diff_text = get_diff_from_commit(repo_dir, args.source)
+            commit_info = get_commit_info(repo_dir, args.source)
+        else:
+            print(f"Error: not a valid git repo: {repo_dir}", file=sys.stderr)
+            sys.exit(1)
+
+    if not diff_text or not diff_text.strip():
+        print("Error: empty diff", file=sys.stderr)
+        sys.exit(1)
+
+    files = parse_diff(diff_text)
+
+    if not files:
+        print("Warning: no file changes found in diff", file=sys.stderr)
+
+    html = generate_html(files, repo_dir, commit_info)
+
+    with open(args.output, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    print(f"Diff HTML written to {args.output}")
+    print(f"  Files changed: {len(files)}")
+    total_add = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "+")
+    total_del = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "-")
+    print(f"  {total_add} additions, {total_del} deletions")
+
+
+if __name__ == "__main__":
+    main()
