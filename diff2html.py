@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-diff2html - Generate GitHub-style HTML diff from a git diff file or commit.
+diff2html - Generate GitHub-style HTML diff from a git diff.
 
 Usage:
-  python diff2html.py <repo-dir> <diff-file> [-o output.html]
-  python diff2html.py <repo-dir> <commit-hash> [-o output.html]
-  python diff2html.py <repo-dir> --stdin [-o output.html]
+  python diff2html.py [-o output.html]               diff current branch vs main/master
+  python diff2html.py <commit-hash> [-o output.html]  diff a specific commit
+  python diff2html.py <diff-file> [-o output.html]    render an existing diff file
+  python diff2html.py --stdin [-o output.html]        read diff from stdin
 """
 
 import argparse
@@ -642,53 +643,69 @@ def read_diff_from_file(path: str) -> str:
 # CLI
 # ---------------------------------------------------------------------------
 
+def _get_current_branch(repo_dir: str) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True, cwd=repo_dir
+    )
+    return result.stdout.strip()
+
+
+def _find_base_branch(repo_dir: str) -> str | None:
+    for branch in ["main", "master"]:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", branch],
+            capture_output=True, text=True, cwd=repo_dir
+        )
+        if result.returncode == 0:
+            return branch
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate GitHub-style HTML diff from a git diff or commit."
+        description="Generate GitHub-style HTML diff."
     )
-    parser.add_argument("repo", nargs="?", default=".",
-                        help="Path to git repository (default: current directory)")
     parser.add_argument("source", nargs="?", default=None,
-                        help="Diff file path, commit hash, or '--stdin'")
+                        help="Commit hash, diff file path, or omit to diff current branch against main/master")
     parser.add_argument("-o", "--output", default="diff.html",
                         help="Output HTML file (default: diff.html)")
     parser.add_argument("--stdin", action="store_true",
                         help="Read diff from stdin (use instead of source)")
 
     args = parser.parse_args()
-    repo_dir = os.path.abspath(args.repo)
+    repo_dir = os.path.abspath(".")
 
-    if not os.path.isdir(repo_dir):
-        print(f"Error: not a directory: {repo_dir}", file=sys.stderr)
-        sys.exit(1)
-
-    # Check if repo is a git repo
     git_dir = os.path.join(repo_dir, ".git")
     is_git = os.path.isdir(git_dir) or os.path.isfile(git_dir)
 
-    # Determine diff source
     commit_info = None
     diff_text = None
 
     if args.stdin:
         diff_text = sys.stdin.read()
     elif args.source is None:
-        # No source given: use latest commit
         if not is_git:
-            print("Error: not a valid git repo", file=sys.stderr)
+            print("Error: not a git repository", file=sys.stderr)
             sys.exit(1)
-        diff_text = get_diff_from_commit(repo_dir, "HEAD")
+        current_branch = _get_current_branch(repo_dir)
+        base = _find_base_branch(repo_dir)
+        if base and current_branch != base:
+            diff_text = subprocess.run(
+                ["git", "diff", f"{base}...HEAD"],
+                capture_output=True, text=True, cwd=repo_dir
+            ).stdout
+        else:
+            diff_text = get_diff_from_commit(repo_dir, "HEAD")
         commit_info = get_commit_info(repo_dir, "HEAD")
     elif os.path.isfile(args.source):
         diff_text = read_diff_from_file(args.source)
     else:
-        # Treat as commit hash
-        if is_git:
-            diff_text = get_diff_from_commit(repo_dir, args.source)
-            commit_info = get_commit_info(repo_dir, args.source)
-        else:
-            print(f"Error: not a valid git repo: {repo_dir}", file=sys.stderr)
+        if not is_git:
+            print(f"Error: not a git repository: {repo_dir}", file=sys.stderr)
             sys.exit(1)
+        diff_text = get_diff_from_commit(repo_dir, args.source)
+        commit_info = get_commit_info(repo_dir, args.source)
 
     if not diff_text or not diff_text.strip():
         print("Error: empty diff", file=sys.stderr)
