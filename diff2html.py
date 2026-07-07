@@ -187,8 +187,8 @@ def parse_diff(text: str) -> list[DiffFile]:
 
 CSS = """\
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #0d1117; color: #e6edf3; padding: 20px; }
-.container { max-width: 1280px; margin: 0 auto; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #0d1117; color: #e6edf3; overflow-x: hidden; }
+.container { max-width: 1280px; margin: 0 auto; padding: 20px; }
 
 /* Header */
 .commit-header { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
@@ -261,6 +261,42 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 
 /* Syntax highlight token colours */
 {token_css}
+
+/* Sidebar */
+.sidebar { position: fixed; top: 0; left: 0; width: 300px; height: 100vh; background: #161b22; border-right: 1px solid #30363d; z-index: 100; transform: translateX(-100%); transition: transform .2s ease; overflow-y: auto; display: flex; flex-direction: column; }
+.sidebar.open { transform: translateX(0); }
+.sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #30363d; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+.sidebar-close { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1; }
+.sidebar-close:hover { color: #e6edf3; }
+.sidebar-tree { padding: 8px 0; flex: 1; overflow-y: auto; }
+
+/* Sidebar toggle button */
+.sidebar-toggle-btn { position: fixed; top: 12px; left: 12px; z-index: 99; background: #161b22; border: 1px solid #30363d; color: #8b949e; border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1.5; display: flex; align-items: center; gap: 6px; transition: opacity .2s; }
+.sidebar-toggle-btn:hover { background: #1c2128; color: #e6edf3; }
+.sidebar-toggle-btn.hidden { opacity: 0; pointer-events: none; }
+
+/* Main content shift */
+.main-content { transition: margin-left .2s ease; }
+.main-content.shifted { margin-left: 300px; }
+
+/* Tree folder */
+.tree-folder { font-size: 13px; }
+.tree-folder-header { display: flex; align-items: center; padding: 4px 16px; cursor: pointer; user-select: none; color: #e6edf3; }
+.tree-folder-header::-webkit-details-marker { display: none; }
+.tree-folder-header:hover { background: #1c2128; }
+.tree-folder-icon { display: inline-block; width: 16px; font-size: 10px; color: #8b949e; transition: transform .15s; flex-shrink: 0; text-align: center; }
+.tree-folder[open] > .tree-folder-header .tree-folder-icon { transform: rotate(90deg); }
+.tree-folder-name { margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-folder-contents { padding-left: 16px; }
+
+/* Tree file */
+.tree-file { display: flex; align-items: center; padding: 4px 16px; text-decoration: none; color: #e6edf3; font-size: 13px; }
+.tree-file:hover { background: #1c2128; }
+.tree-file .file-status { width: 16px; height: 16px; line-height: 16px; font-size: 9px; margin-right: 6px; flex-shrink: 0; }
+.tree-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-file-stats { font-size: 11px; margin-left: auto; white-space: nowrap; }
+.tree-file.active { background: #1c2128; border-left: 2px solid #58a6ff; padding-left: 14px; }
+.tree-file.active .tree-file-name { color: #58a6ff; }
 """
 
 
@@ -373,6 +409,71 @@ def status_char(s: str) -> str:
     return {"added": "A", "deleted": "D", "modified": "M", "renamed": "R", "copied": "C"}.get(s, "?")
 
 
+def _build_file_tree(files: list[DiffFile]) -> dict:
+    """Build a nested tree dict from file list."""
+    tree: dict = {"__files__": [], "__dirs__": {}}
+    for df in files:
+        path = df.new_path if df.new_path else df.old_path
+        parts = path.replace("\\", "/").split("/")
+        add_c = sum(1 for h in df.hunks for l in h.lines if l.kind == "+")
+        del_c = sum(1 for h in df.hunks for l in h.lines if l.kind == "-")
+        status = status_char(df.status)
+        anchor = path.replace("\\", "/")
+        node = tree
+        for i, part in enumerate(parts):
+            if i == len(parts) - 1:
+                node["__files__"].append({
+                    "name": part,
+                    "anchor": anchor,
+                    "status": status,
+                    "add": add_c,
+                    "del": del_c,
+                })
+            else:
+                if part not in node["__dirs__"]:
+                    node["__dirs__"][part] = {"__files__": [], "__dirs__": {}}
+                node = node["__dirs__"][part]
+    return tree
+
+
+def _render_tree_node(node: dict) -> str:
+    """Recursively render tree node to HTML."""
+    parts = []
+    dirs_sorted = sorted(node["__dirs__"].keys(), key=str.lower)
+    files_sorted = sorted(node["__files__"], key=lambda f: f["name"].lower())
+    for dirname in dirs_sorted:
+        child = node["__dirs__"][dirname]
+        sub = _render_tree_node(child)
+        parts.append(
+            f'<details class="tree-folder" open>'
+            f'<summary class="tree-folder-header">'
+            f'<span class="tree-folder-icon">▾</span>'
+            f'<span class="tree-folder-name">{escape(dirname)}</span>'
+            f'</summary>'
+            f'<div class="tree-folder-contents">'
+            f'{sub}'
+            f'</div>'
+            f'</details>'
+        )
+    for f in files_sorted:
+        stats = ""
+        if f["add"] or f["del"]:
+            sp = []
+            if f["add"]:
+                sp.append(f'<span class="add-stat">+{f["add"]}</span>')
+            if f["del"]:
+                sp.append(f'<span class="del-stat">−{f["del"]}</span>')
+            stats = " " + " ".join(sp)
+        parts.append(
+            f'<a class="tree-file" href="#{escape(f["anchor"])}" data-file="{escape(f["anchor"])}">'
+            f'<span class="file-status file-status-{f["status"]}">{f["status"]}</span>'
+            f'<span class="tree-file-name">{escape(f["name"])}</span>'
+            f'<span class="tree-file-stats">{stats}</span>'
+            f'</a>'
+        )
+    return "\n".join(parts)
+
+
 def render_hunk(hunk: Hunk, path: str = "") -> str:
     rows = []
     header_text = f"@@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@"
@@ -463,8 +564,13 @@ function toggleAll(expand) {
     if (expand) d.setAttribute('open', ''); else d.removeAttribute('open');
   });
 }
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('main-content').classList.toggle('shifted');
+  document.getElementById('sidebar-toggle-btn').classList.toggle('hidden');
+}
 document.addEventListener('click', function(e) {
-  var link = e.target.closest('.file-list-item');
+  var link = e.target.closest('.file-list-item, .tree-file');
   if (!link) return;
   var href = link.getAttribute('href');
   if (!href || !href.startsWith('#')) return;
@@ -472,6 +578,10 @@ document.addEventListener('click', function(e) {
   if (target && target.tagName === 'DETAILS') {
     target.setAttribute('open', '');
     setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+  }
+  if (link.classList.contains('tree-file')) {
+    document.querySelectorAll('.tree-file.active').forEach(function(el) { el.classList.remove('active'); });
+    link.classList.add('active');
   }
 });
 function copyPath(btn) {
@@ -567,6 +677,10 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
 
     diff_html = "\n".join(render_file(df, repo_dir) for df in files)
 
+    # Build sidebar tree
+    tree = _build_file_tree(files)
+    tree_html = _render_tree_node(tree)
+
     return f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -577,10 +691,22 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
 <style>{CSS.replace("{token_css}", SYNTAX_CSS)}</style>
 </head>
 <body>
-<div class="container">
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <span>Files changed ({len(files)})</span>
+    <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+  </div>
+  <div class="sidebar-tree">
+    {tree_html}
+  </div>
+</aside>
+<button class="sidebar-toggle-btn" id="sidebar-toggle-btn" onclick="toggleSidebar()">☰ Files</button>
+<div class="main-content" id="main-content">
+  <div class="container">
 {commit_html}
 {file_list_html}
 {diff_html}
+  </div>
 </div>
 <script>{JS}</script>
 </body>
