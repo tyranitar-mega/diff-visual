@@ -233,6 +233,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .diff-binary { padding: 24px; text-align: center; color: #8b949e; font-size: 14px; }
 
 /* Unified diff table */
+.diff-table-wrapper { overflow-x: auto; }
 .diff-table { width: 100%; border-collapse: collapse; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 20px; }
 .diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; }
 .diff-table .ln { width: 50px; text-align: right; padding-right: 8px; color: #484f58; user-select: none; }
@@ -550,10 +551,10 @@ def render_file(df: DiffFile, repo_dir: str, open_by_default: bool = False) -> s
         f'<button class="copy-btn" data-path="{escape(title)}" onclick="event.stopPropagation();copyPath(this)">copy</button>'
         f'</summary>'
     )
-    parts.append('<table class="diff-table">')
+    parts.append('<div class="diff-table-wrapper"><table class="diff-table">')
     for hunk in df.hunks:
         parts.append(render_hunk(hunk, title))
-    parts.append('</table>')
+    parts.append('</table></div>')
     parts.append('</details>')
     return "\n".join(parts)
 
