@@ -264,12 +264,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 {token_css}
 
 /* Sidebar */
-.sidebar { position: fixed; top: 0; left: 0; width: 300px; height: 100vh; background: #161b22; border-right: 1px solid #30363d; z-index: 100; transform: translateX(-100%); transition: transform .2s ease; overflow-y: auto; display: flex; flex-direction: column; }
+.sidebar { position: fixed; top: 0; left: 0; width: 300px; height: 100vh; background: #161b22; border-right: 1px solid #30363d; z-index: 100; transform: translateX(-100%); transition: transform .2s ease; display: flex; flex-direction: column; }
 .sidebar.open { transform: translateX(0); }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #30363d; font-size: 14px; font-weight: 600; flex-shrink: 0; }
 .sidebar-close { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1; }
 .sidebar-close:hover { color: #e6edf3; }
-.sidebar-tree { padding: 8px 0; flex: 1; overflow-y: auto; }
+.sidebar-tree { padding: 8px 0; flex: 1; overflow-y: auto; min-height: 0; }
 
 /* Sidebar toggle button */
 .sidebar-toggle-btn { position: fixed; top: 12px; left: 12px; z-index: 99; background: #161b22; border: 1px solid #30363d; color: #8b949e; border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1.5; display: flex; align-items: center; gap: 6px; transition: opacity .2s; }
@@ -437,6 +437,24 @@ def _build_file_tree(files: list[DiffFile]) -> dict:
     return tree
 
 
+def _flatten_tree(node: dict) -> None:
+    """Collapse single-child directory chains into compound names.
+
+    e.g. a/ → b/ → c/ becomes a/b/c/ when each has only that one child.
+    """
+    for dirname in list(node["__dirs__"]):
+        child = node["__dirs__"][dirname]
+        _flatten_tree(child)
+        while len(child["__dirs__"]) == 1 and not child["__files__"]:
+            sub_name = next(iter(child["__dirs__"]))
+            sub_child = child["__dirs__"][sub_name]
+            merged = dirname + "/" + sub_name
+            node["__dirs__"][merged] = sub_child
+            del node["__dirs__"][dirname]
+            dirname = merged
+            child = sub_child
+
+
 def _render_tree_node(node: dict) -> str:
     """Recursively render tree node to HTML."""
     parts = []
@@ -445,11 +463,12 @@ def _render_tree_node(node: dict) -> str:
     for dirname in dirs_sorted:
         child = node["__dirs__"][dirname]
         sub = _render_tree_node(child)
+        display_name = dirname + "/" if "/" in dirname else dirname
         parts.append(
             f'<details class="tree-folder" open>'
             f'<summary class="tree-folder-header">'
             f'<span class="tree-folder-icon">▾</span>'
-            f'<span class="tree-folder-name">{escape(dirname)}</span>'
+            f'<span class="tree-folder-name">{escape(display_name)}</span>'
             f'</summary>'
             f'<div class="tree-folder-contents">'
             f'{sub}'
@@ -680,6 +699,7 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
 
     # Build sidebar tree
     tree = _build_file_tree(files)
+    _flatten_tree(tree)
     tree_html = _render_tree_node(tree)
 
     return f"""\
