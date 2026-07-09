@@ -187,93 +187,93 @@ def parse_diff(text: str) -> list[DiffFile]:
 
 CSS = """\
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #0d1117; color: #e6edf3; overflow-x: hidden; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #ffffff; color: #1f2328; overflow-x: hidden; }
 .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
 
 /* Header */
-.commit-header { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+.commit-header { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
 .commit-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
-.commit-meta { font-size: 12px; color: #8b949e; }
+.commit-meta { font-size: 12px; color: #656d76; }
 .commit-meta span { margin-right: 16px; }
 
 /* File list */
-.file-list { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
-.file-list-item { display: flex; align-items: center; padding: 8px 16px; border-bottom: 1px solid #21262d; text-decoration: none; color: #e6edf3; font-size: 14px; }
+.file-list { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+.file-list-item { display: flex; align-items: center; padding: 8px 16px; border-bottom: 1px solid #d0d7de; text-decoration: none; color: #1f2328; font-size: 14px; }
 .file-list-item:last-child { border-bottom: none; }
-.file-list-item:hover { background: #1c2128; }
+.file-list-item:hover { background: #e8eaed; }
 .file-status { display: inline-block; width: 20px; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; font-size: 11px; font-weight: 600; margin-right: 8px; flex-shrink: 0; }
-.file-status-A { background: #238636; color: #fff; }
-.file-status-M { background: #9e6a03; color: #fff; }
-.file-status-D { background: #da3633; color: #fff; }
-.file-status-R { background: #1f6feb; color: #fff; }
+.file-status-A { background: #2da44e; color: #fff; }
+.file-status-M { background: #9a6700; color: #fff; }
+.file-status-D { background: #cf222e; color: #fff; }
+.file-status-R { background: #0969da; color: #fff; }
 .file-path { flex: 1; }
 .file-stats { font-size: 12px; }
-.add-stat { color: #3fb950; margin-right: 4px; }
-.del-stat { color: #f85149; }
+.add-stat { color: #1a7f37; margin-right: 4px; }
+.del-stat { color: #cf222e; }
 
 /* Toggle all */
 .toggle-all { margin-left: auto; font-size: 12px; }
-.toggle-all a { color: #58a6ff; cursor: pointer; text-decoration: none; }
+.toggle-all a { color: #0969da; cursor: pointer; text-decoration: none; }
 .toggle-all a:hover { text-decoration: underline; }
-.toggle-all .sep { color: #30363d; margin: 0 6px; }
+.toggle-all .sep { color: #d0d7de; margin: 0 6px; }
 
 /* Collapsible file */
-.diff-file { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+.diff-file { background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
 .diff-file[open] { border-radius: 6px; }
-.diff-file-header { display: flex; align-items: center; padding: 8px 16px; background: #1c2128; font-size: 14px; font-family: Consolas, "Courier New", monospace; cursor: pointer; user-select: none; }
+.diff-file-header { display: flex; align-items: center; padding: 8px 16px; background: #f6f8fa; font-size: 14px; font-family: Consolas, "Courier New", monospace; cursor: pointer; user-select: none; }
 .diff-file-header::-webkit-details-marker { display: none; }
-.diff-file-header::before { content: "\\25B6"; color: #8b949e; font-size: 10px; margin-right: 8px; transition: transform .15s; }
+.diff-file-header::before { content: "\\25B6"; color: #656d76; font-size: 10px; margin-right: 8px; transition: transform .15s; }
 .diff-file[open] > .diff-file-header::before { transform: rotate(90deg); }
 .diff-file-header .file-status { margin-right: 8px; }
 .diff-file-header .file-path { flex: 1; }
 .diff-file-header .file-stats { margin-left: 8px; }
-.diff-file-header .copy-btn { background: none; border: 1px solid #30363d; color: #8b949e; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 1px 6px; margin-left: 8px; font-family: inherit; }
-.diff-file-header .copy-btn:hover { background: #30363d; color: #e6edf3; }
-.diff-file-header .copy-btn.copied { border-color: #3fb950; color: #3fb950; }
-.diff-binary { padding: 24px; text-align: center; color: #8b949e; font-size: 14px; }
+.diff-file-header .copy-btn { background: none; border: 1px solid #d0d7de; color: #656d76; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 1px 6px; margin-left: 8px; font-family: inherit; }
+.diff-file-header .copy-btn:hover { background: #e8eaed; color: #1f2328; }
+.diff-file-header .copy-btn.copied { border-color: #1a7f37; color: #1a7f37; }
+.diff-binary { padding: 24px; text-align: center; color: #656d76; font-size: 14px; }
 
 /* Unified diff table */
 .diff-table-wrapper { overflow-x: auto; }
 .diff-table { width: 100%; border-collapse: collapse; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 20px; }
 .diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; }
-.diff-table .ln { width: 50px; text-align: right; padding-right: 8px; color: #484f58; user-select: none; }
-.diff-table .ln-old { border-right: 1px solid #30363d; }
-.diff-table .ln-new { border-right: 1px solid #30363d; }
-.diff-table .kind { width: 16px; text-align: center; padding: 0; user-select: none; color: #484f58; }
+.diff-table .ln { width: 50px; text-align: right; padding-right: 8px; color: #8b949e; user-select: none; }
+.diff-table .ln-old { border-right: 1px solid #d0d7de; }
+.diff-table .ln-new { border-right: 1px solid #d0d7de; }
+.diff-table .kind { width: 16px; text-align: center; padding: 0; user-select: none; color: #8b949e; }
 .diff-table .content { padding-left: 8px; }
 
 /* Line colours */
-.line-add { background: #12261d; }
-.line-add .ln-old { background: #0d1117; }
-.line-add .ln-new { background: #12261d; }
-.line-add .content { background: #12261d; }
-.line-del { background: #28171a; }
-.line-del .ln-old { background: #28171a; }
-.line-del .ln-new { background: #0d1117; }
-.line-del .content { background: #28171a; }
-.line-ctx { background: #0d1117; }
-.line-hunk-header { background: #0d1117; }
-.line-hunk-header td { color: #8b949e; padding: 4px 8px; font-weight: 500; }
+.line-add { background: #e6ffec; }
+.line-add .ln-old { background: #ffffff; }
+.line-add .ln-new { background: #e6ffec; }
+.line-add .content { background: #e6ffec; }
+.line-del { background: #ffebe9; }
+.line-del .ln-old { background: #ffebe9; }
+.line-del .ln-new { background: #ffffff; }
+.line-del .content { background: #ffebe9; }
+.line-ctx { background: #ffffff; }
+.line-hunk-header { background: #f6f8fa; }
+.line-hunk-header td { color: #656d76; padding: 4px 8px; font-weight: 500; }
 
 /* File diff stats summary */
-.stats-summary { display: flex; align-items: center; padding: 8px 16px; background: #1c2128; border-bottom: 1px solid #30363d; font-size: 12px; color: #8b949e; flex-wrap: wrap; gap: 4px 16px; }
-.stats-summary .additions { color: #3fb950; }
-.stats-summary .deletions { color: #f85149; }
+.stats-summary { display: flex; align-items: center; padding: 8px 16px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 12px; color: #656d76; flex-wrap: wrap; gap: 4px 16px; }
+.stats-summary .additions { color: #1a7f37; }
+.stats-summary .deletions { color: #cf222e; }
 
 /* Syntax highlight token colours */
 {token_css}
 
 /* Sidebar */
-.sidebar { position: fixed; top: 0; left: 0; width: 300px; height: 100vh; background: #161b22; border-right: 1px solid #30363d; z-index: 100; transform: translateX(-100%); transition: transform .2s ease; display: flex; flex-direction: column; }
+.sidebar { position: fixed; top: 0; left: 0; width: 300px; height: 100vh; background: #f6f8fa; border-right: 1px solid #d0d7de; z-index: 100; transform: translateX(-100%); transition: transform .2s ease; display: flex; flex-direction: column; }
 .sidebar.open { transform: translateX(0); }
-.sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #30363d; font-size: 14px; font-weight: 600; flex-shrink: 0; }
-.sidebar-close { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1; }
-.sidebar-close:hover { color: #e6edf3; }
+.sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #d0d7de; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+.sidebar-close { background: none; border: none; color: #656d76; cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1; }
+.sidebar-close:hover { color: #1f2328; }
 .sidebar-tree { padding: 8px 0; flex: 1; overflow-y: auto; min-height: 0; }
 
 /* Sidebar toggle button */
-.sidebar-toggle-btn { position: fixed; top: 12px; left: 12px; z-index: 99; background: #161b22; border: 1px solid #30363d; color: #8b949e; border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1.5; display: flex; align-items: center; gap: 6px; transition: opacity .2s; }
-.sidebar-toggle-btn:hover { background: #1c2128; color: #e6edf3; }
+.sidebar-toggle-btn { position: fixed; top: 12px; left: 12px; z-index: 99; background: #ffffff; border: 1px solid #d0d7de; color: #656d76; border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1.5; display: flex; align-items: center; gap: 6px; transition: opacity .2s; }
+.sidebar-toggle-btn:hover { background: #e8eaed; color: #1f2328; }
 .sidebar-toggle-btn.hidden { opacity: 0; pointer-events: none; }
 
 /* Main content shift */
@@ -282,22 +282,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 
 /* Tree folder */
 .tree-folder { font-size: 13px; }
-.tree-folder-header { display: flex; align-items: center; padding: 4px 16px; cursor: pointer; user-select: none; color: #e6edf3; }
+.tree-folder-header { display: flex; align-items: center; padding: 4px 16px; cursor: pointer; user-select: none; color: #1f2328; }
 .tree-folder-header::-webkit-details-marker { display: none; }
-.tree-folder-header:hover { background: #1c2128; }
-.tree-folder-icon { display: inline-block; width: 16px; font-size: 10px; color: #8b949e; transition: transform .15s; flex-shrink: 0; text-align: center; }
+.tree-folder-header:hover { background: #e8eaed; }
+.tree-folder-icon { display: inline-block; width: 16px; font-size: 10px; color: #656d76; transition: transform .15s; flex-shrink: 0; text-align: center; }
 .tree-folder[open] > .tree-folder-header .tree-folder-icon { transform: rotate(90deg); }
 .tree-folder-name { margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-folder-contents { padding-left: 16px; }
 
 /* Tree file */
-.tree-file { display: flex; align-items: center; padding: 4px 16px; text-decoration: none; color: #e6edf3; font-size: 13px; }
-.tree-file:hover { background: #1c2128; }
+.tree-file { display: flex; align-items: center; padding: 4px 16px; text-decoration: none; color: #1f2328; font-size: 13px; }
+.tree-file:hover { background: #e8eaed; }
 .tree-file .file-status { width: 16px; height: 16px; line-height: 16px; font-size: 9px; margin-right: 6px; flex-shrink: 0; }
 .tree-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-file-stats { font-size: 11px; margin-left: auto; white-space: nowrap; }
-.tree-file.active { background: #1c2128; border-left: 2px solid #58a6ff; padding-left: 14px; }
-.tree-file.active .tree-file-name { color: #58a6ff; }
+.tree-file.active { background: #e8eaed; border-left: 2px solid #0969da; padding-left: 14px; }
+.tree-file.active .tree-file-name { color: #0969da; }
 """
 
 
@@ -308,51 +308,52 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 TOKEN_COLORS: dict = {}
 if HAS_PYGMENTS:
     TOKEN_COLORS = {
-        Token.Keyword:            "#ff7b72",
-        Token.Keyword.Constant:   "#ff7b72",
-        Token.Keyword.Declaration: "#ff7b72",
-        Token.Keyword.Namespace:  "#ff7b72",
-        Token.Keyword.Pseudo:     "#ff7b72",
-        Token.Keyword.Reserved:   "#ff7b72",
-        Token.Keyword.Type:       "#ff7b72",
-        Token.Name.Builtin:       "#ffa657",
-        Token.Name.Builtin.Pseudo: "#ffa657",
-        Token.Name.Class:         "#d2a8ff",
-        Token.Name.Decorator:     "#d2a8ff",
-        Token.Name.Entity:        "#d2a8ff",
-        Token.Name.Exception:     "#ff7b72",
-        Token.Name.Function:      "#d2a8ff",
-        Token.Name.Label:         "#ff7b72",
-        Token.Name.Namespace:     "#d2a8ff",
-        Token.Name.Tag:           "#7ee787",
-        Token.Name.Variable:      "#ffa657",
-        Token.String:             "#a5d6ff",
-        Token.String.Char:        "#a5d6ff",
-        Token.String.Doc:         "#a5d6ff",
-        Token.String.Double:      "#a5d6ff",
-        Token.String.Escape:      "#a5d6ff",
-        Token.String.Heredoc:     "#a5d6ff",
-        Token.String.Interpol:    "#a5d6ff",
-        Token.String.Other:       "#a5d6ff",
-        Token.String.Single:      "#a5d6ff",
-        Token.Number:             "#79c0ff",
-        Token.Number.Bin:         "#79c0ff",
-        Token.Number.Float:       "#79c0ff",
-        Token.Number.Hex:         "#79c0ff",
-        Token.Number.Integer:     "#79c0ff",
-        Token.Number.Oct:         "#79c0ff",
-        Token.Comment:            "#8b949e",
-        Token.Comment.Hashbang:   "#8b949e",
-        Token.Comment.Multiline:  "#8b949e",
-        Token.Comment.Preproc:    "#8b949e",
-        Token.Comment.Single:     "#8b949e",
-        Token.Comment.Special:    "#8b949e",
-        Token.Operator:           "#ff7b72",
-        Token.Operator.Word:      "#ff7b72",
-        Token.Punctuation:        "#e6edf3",
-        Token.Generic.Deleted:    "#ffa198",
-        Token.Generic.Inserted:   "#3fb950",
-        Token.Generic.Emph:       "#e6edf3",
+        Token.Keyword:            "#cf222e",
+        Token.Keyword.Constant:   "#cf222e",
+        Token.Keyword.Declaration: "#cf222e",
+        Token.Keyword.Namespace:  "#cf222e",
+        Token.Keyword.Pseudo:     "#cf222e",
+        Token.Keyword.Reserved:   "#cf222e",
+        Token.Keyword.Reserved:   "#cf222e",
+        Token.Keyword.Type:       "#cf222e",
+        Token.Name.Builtin:       "#953800",
+        Token.Name.Builtin.Pseudo: "#953800",
+        Token.Name.Class:         "#8250df",
+        Token.Name.Decorator:     "#8250df",
+        Token.Name.Entity:        "#8250df",
+        Token.Name.Exception:     "#cf222e",
+        Token.Name.Function:      "#8250df",
+        Token.Name.Label:         "#cf222e",
+        Token.Name.Namespace:     "#8250df",
+        Token.Name.Tag:           "#116329",
+        Token.Name.Variable:      "#953800",
+        Token.String:             "#0550ae",
+        Token.String.Char:        "#0550ae",
+        Token.String.Doc:         "#0550ae",
+        Token.String.Double:      "#0550ae",
+        Token.String.Escape:      "#0550ae",
+        Token.String.Heredoc:     "#0550ae",
+        Token.String.Interpol:    "#0550ae",
+        Token.String.Other:       "#0550ae",
+        Token.String.Single:      "#0550ae",
+        Token.Number:             "#0550ae",
+        Token.Number.Bin:         "#0550ae",
+        Token.Number.Float:       "#0550ae",
+        Token.Number.Hex:         "#0550ae",
+        Token.Number.Integer:     "#0550ae",
+        Token.Number.Oct:         "#0550ae",
+        Token.Comment:            "#6e7781",
+        Token.Comment.Hashbang:   "#6e7781",
+        Token.Comment.Multiline:  "#6e7781",
+        Token.Comment.Preproc:    "#6e7781",
+        Token.Comment.Single:     "#6e7781",
+        Token.Comment.Special:    "#6e7781",
+        Token.Operator:           "#cf222e",
+        Token.Operator.Word:      "#cf222e",
+        Token.Punctuation:        "#1f2328",
+        Token.Generic.Deleted:    "#cf222e",
+        Token.Generic.Inserted:   "#1a7f37",
+        Token.Generic.Emph:       "#1f2328",
     }
 
     def _token_css() -> str:
