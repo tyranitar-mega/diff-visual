@@ -187,18 +187,18 @@ def parse_diff(text: str) -> list[DiffFile]:
 
 CSS = """\
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #ffffff; color: #1f2328; overflow-x: hidden; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #ffffff; color: #1f2328; overflow-x: hidden; font-weight: 500; }
 .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
 
 /* Header */
-.commit-header { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+.commit-header { background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
 .commit-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .commit-meta { font-size: 12px; color: #656d76; }
 .commit-meta span { margin-right: 16px; }
 
 /* File list */
-.file-list { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
-.file-list-item { display: flex; align-items: center; padding: 8px 16px; border-bottom: 1px solid #d0d7de; text-decoration: none; color: #1f2328; font-size: 14px; }
+.file-list { background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+.file-list-item { display: flex; align-items: center; padding: 8px 16px; border-bottom: 1px solid #d0d7de; text-decoration: none; color: #1f2328; font-size: 14px; font-weight: 500; }
 .file-list-item:last-child { border-bottom: none; }
 .file-list-item:hover { background: #e8eaed; }
 .file-status { display: inline-block; width: 20px; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; font-size: 11px; font-weight: 600; margin-right: 8px; flex-shrink: 0; }
@@ -220,7 +220,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 /* Collapsible file */
 .diff-file { background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
 .diff-file[open] { border-radius: 6px; }
-.diff-file-header { display: flex; align-items: center; padding: 8px 16px; background: #f6f8fa; font-size: 14px; font-family: Consolas, "Courier New", monospace; cursor: pointer; user-select: none; }
+.diff-file-header { display: flex; align-items: center; padding: 8px 16px; background: #f6f8fa; font-size: 14px; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; cursor: pointer; user-select: none; font-weight: 500; }
 .diff-file-header::-webkit-details-marker { display: none; }
 .diff-file-header::before { content: "\\25B6"; color: #656d76; font-size: 10px; margin-right: 8px; transition: transform .15s; }
 .diff-file[open] > .diff-file-header::before { transform: rotate(90deg); }
@@ -234,13 +234,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 
 /* Unified diff table */
 .diff-table-wrapper { overflow-x: auto; }
-.diff-table { width: 100%; border-collapse: collapse; font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 20px; }
-.diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; }
-.diff-table .ln { width: 50px; text-align: right; padding-right: 8px; color: #8b949e; user-select: none; }
+.diff-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 20px; }
+.diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; font-weight: 500; }
+.diff-table .ln { width: 50px; min-width: 50px; text-align: right; padding-right: 10px; color: #6e7781; user-select: none; }
 .diff-table .ln-old { border-right: 1px solid #d0d7de; }
 .diff-table .ln-new { border-right: 1px solid #d0d7de; }
-.diff-table .kind { width: 16px; text-align: center; padding: 0; user-select: none; color: #8b949e; }
-.diff-table .content { padding-left: 8px; }
+.diff-table .kind { width: 16px; min-width: 16px; text-align: center; padding: 0; user-select: none; color: #6e7781; }
+.diff-table .content { padding-left: 10px; padding-right: 10px; }
 
 /* Line colours */
 .line-add { background: #e6ffec; }
@@ -272,7 +272,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .sidebar-tree { padding: 8px 0; flex: 1; overflow-y: auto; min-height: 0; }
 
 /* Sidebar toggle button */
-.sidebar-toggle-btn { position: fixed; top: 12px; left: 12px; z-index: 99; background: #ffffff; border: 1px solid #d0d7de; color: #656d76; border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1.5; display: flex; align-items: center; gap: 6px; transition: opacity .2s; }
+.sidebar-toggle-btn { position: fixed; top: 12px; left: 12px; z-index: 99; background: #ffffff; border: 1px solid #d0d7de; color: #656d76; border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px; line-height: 1.5; display: flex; align-items: center; gap: 6px; transition: opacity .2s; font-weight: 500; }
 .sidebar-toggle-btn:hover { background: #e8eaed; color: #1f2328; }
 .sidebar-toggle-btn.hidden { opacity: 0; pointer-events: none; }
 
@@ -282,7 +282,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 
 /* Tree folder */
 .tree-folder { font-size: 13px; }
-.tree-folder-header { display: flex; align-items: center; padding: 4px 16px; cursor: pointer; user-select: none; color: #1f2328; }
+.tree-folder-header { display: flex; align-items: center; padding: 4px 16px; cursor: pointer; user-select: none; color: #1f2328; font-weight: 500; }
 .tree-folder-header::-webkit-details-marker { display: none; }
 .tree-folder-header:hover { background: #e8eaed; }
 .tree-folder-icon { display: inline-block; width: 16px; font-size: 10px; color: #656d76; transition: transform .15s; flex-shrink: 0; text-align: center; }
@@ -291,7 +291,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .tree-folder-contents { padding-left: 16px; }
 
 /* Tree file */
-.tree-file { display: flex; align-items: center; padding: 4px 16px; text-decoration: none; color: #1f2328; font-size: 13px; }
+.tree-file { display: flex; align-items: center; padding: 4px 16px; text-decoration: none; color: #1f2328; font-size: 13px; font-weight: 500; }
 .tree-file:hover { background: #e8eaed; }
 .tree-file .file-status { width: 16px; height: 16px; line-height: 16px; font-size: 9px; margin-right: 6px; flex-shrink: 0; }
 .tree-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -840,7 +840,7 @@ def main():
         base = _find_base_branch(repo_dir)
         if base and current_branch != base:
             diff_text = subprocess.run(
-                ["git", "diff", f"{base}...HEAD"],
+                ["git", "diff", f"{base}..HEAD"],
                 capture_output=True, text=True, cwd=repo_dir
             ).stdout
         else:
