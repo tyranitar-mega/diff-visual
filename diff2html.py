@@ -236,10 +236,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .diff-table-wrapper { overflow-x: auto; }
 .diff-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 20px; }
 .diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; font-weight: 500; }
-.diff-table .ln { width: 50px; min-width: 50px; text-align: right; padding-right: 10px; color: #6e7781; user-select: none; }
+.diff-table .ln { width: 50px; min-width: 50px; text-align: right; padding-right: 10px; color: #6e7781; -webkit-user-select: none; -moz-user-select: none; user-select: none; }
 .diff-table .ln-old { border-right: 1px solid #d0d7de; }
 .diff-table .ln-new { border-right: 1px solid #d0d7de; }
-.diff-table .kind { width: 16px; min-width: 16px; text-align: center; padding: 0; user-select: none; color: #6e7781; }
+.diff-table .kind { width: 16px; min-width: 16px; text-align: center; padding: 0; -webkit-user-select: none; -moz-user-select: none; user-select: none; color: #6e7781; }
 .diff-table .content { padding-left: 10px; padding-right: 10px; }
 
 /* Line colours */
@@ -630,6 +630,22 @@ function copyPath(btn) {
     }, 1500);
   });
 }
+document.addEventListener('copy', function(e) {
+  var sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  var range = sel.getRangeAt(0);
+  var node = range.commonAncestorContainer;
+  if (node.nodeType === 3) node = node.parentNode;
+  if (!node.closest || !node.closest('.diff-table')) return;
+  var div = document.createElement('div');
+  div.appendChild(range.cloneContents());
+  var cells = div.querySelectorAll('.ln, .kind');
+  for (var i = cells.length - 1; i >= 0; i--) cells[i].remove();
+  var lines = [];
+  div.querySelectorAll('.content').forEach(function(el) { lines.push(el.textContent); });
+  e.clipboardData.setData('text/plain', lines.join('\n'));
+  e.preventDefault();
+});
 """
 
 def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict | None = None) -> str:
