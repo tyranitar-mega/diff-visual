@@ -237,6 +237,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .diff-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 20px; }
 .diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; font-weight: 500; }
 .diff-table .ln { width: 50px; min-width: 50px; text-align: right; padding-right: 10px; color: #6e7781; -webkit-user-select: none; -moz-user-select: none; user-select: none; }
+.diff-table .ln::before { content: attr(data-ln); }
+.diff-table .kind::before { content: attr(data-kind); }
 .diff-table .ln-old { border-right: 1px solid #d0d7de; }
 .diff-table .ln-new { border-right: 1px solid #d0d7de; }
 .diff-table .kind { width: 16px; min-width: 16px; text-align: center; padding: 0; -webkit-user-select: none; -moz-user-select: none; user-select: none; color: #6e7781; }
@@ -518,9 +520,9 @@ def render_hunk(hunk: Hunk, path: str = "") -> str:
             content = escape(dl.content)
         rows.append(
             f'<tr class="{cls}">'
-            f'<td class="ln ln-old">{old_ln_str}</td>'
-            f'<td class="ln ln-new">{new_ln_str}</td>'
-            f'<td class="kind">{kind_sym}</td>'
+            f'<td class="ln ln-old" data-ln="{old_ln_str}"></td>'
+            f'<td class="ln ln-new" data-ln="{new_ln_str}"></td>'
+            f'<td class="kind" data-kind="{kind_sym}"></td>'
             f'<td class="content">{content}</td>'
             f'</tr>'
         )
