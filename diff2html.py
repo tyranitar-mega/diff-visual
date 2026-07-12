@@ -643,7 +643,7 @@ document.addEventListener('copy', function(e) {
   for (var i = cells.length - 1; i >= 0; i--) cells[i].remove();
   var lines = [];
   div.querySelectorAll('.content').forEach(function(el) { lines.push(el.textContent); });
-  e.clipboardData.setData('text/plain', lines.join('\n'));
+  e.clipboardData.setData('text/plain', lines.join('\\n'));
   e.preventDefault();
 });
 """
