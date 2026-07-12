@@ -630,22 +630,6 @@ function copyPath(btn) {
     }, 1500);
   });
 }
-document.addEventListener('copy', function(e) {
-  var sel = window.getSelection();
-  if (!sel.rangeCount) return;
-  var range = sel.getRangeAt(0);
-  var node = range.commonAncestorContainer;
-  if (node.nodeType === 3) node = node.parentNode;
-  if (!node.closest || !node.closest('.diff-table')) return;
-  var div = document.createElement('div');
-  div.appendChild(range.cloneContents());
-  var cells = div.querySelectorAll('.ln, .kind');
-  for (var i = cells.length - 1; i >= 0; i--) cells[i].remove();
-  var lines = [];
-  div.querySelectorAll('.content').forEach(function(el) { lines.push(el.textContent); });
-  e.clipboardData.setData('text/plain', lines.join('\\n'));
-  e.preventDefault();
-});
 """
 
 def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict | None = None) -> str:
