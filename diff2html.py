@@ -854,8 +854,13 @@ def main():
         if not is_git:
             print(f"Error: not a git repository: {repo_dir}", file=sys.stderr)
             sys.exit(1)
-        diff_text = get_diff_from_commit(repo_dir, args.source)
-        commit_info = get_commit_info(repo_dir, args.source)
+        diff_text = subprocess.run(
+            ["git", "diff", f"{args.source}..HEAD"],
+            capture_output=True, text=True, cwd=repo_dir
+        ).stdout
+        commit_info = get_commit_info(repo_dir, "HEAD")
+        if commit_info:
+            commit_info["title"] = f"{args.source[:8]}..HEAD " + commit_info.get("title", "")
 
     if not diff_text or not diff_text.strip():
         print("Error: empty diff", file=sys.stderr)
