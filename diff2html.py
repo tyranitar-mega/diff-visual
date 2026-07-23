@@ -461,9 +461,7 @@ def _flatten_tree(node: dict) -> None:
 def _render_tree_node(node: dict) -> str:
     """Recursively render tree node to HTML."""
     parts = []
-    dirs_sorted = sorted(node["__dirs__"].keys(), key=str.lower)
-    files_sorted = sorted(node["__files__"], key=lambda f: f["name"].lower())
-    for dirname in dirs_sorted:
+    for dirname in node["__dirs__"]:
         child = node["__dirs__"][dirname]
         sub = _render_tree_node(child)
         display_name = dirname + "/" if "/" in dirname else dirname
@@ -478,7 +476,7 @@ def _render_tree_node(node: dict) -> str:
             f'</div>'
             f'</details>'
         )
-    for f in files_sorted:
+    for f in node["__files__"]:
         stats = ""
         if f["add"] or f["del"]:
             sp = []
