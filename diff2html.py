@@ -816,6 +816,8 @@ def main():
     )
     parser.add_argument("source", nargs="?", default=None,
                         help="Commit hash, diff file path, or omit to diff current branch against main/master")
+    parser.add_argument("-b", "--branch", default=None,
+                        help="Compare current branch against the given branch (e.g. -b main)")
     parser.add_argument("-o", "--output", default="diff.html",
                         help="Output HTML file (default: diff.html)")
     parser.add_argument("--stdin", action="store_true",
@@ -837,7 +839,10 @@ def main():
             print("Error: not a git repository", file=sys.stderr)
             sys.exit(1)
         current_branch = _get_current_branch(repo_dir)
-        base = _find_base_branch(repo_dir)
+        if args.branch:
+            base = args.branch
+        else:
+            base = _find_base_branch(repo_dir)
         if base and current_branch != base:
             diff_text = subprocess.run(
                 ["git", "diff", f"{base}..HEAD"],
@@ -846,6 +851,8 @@ def main():
         else:
             diff_text = get_diff_from_commit(repo_dir, "HEAD")
         commit_info = get_commit_info(repo_dir, "HEAD")
+        if args.branch and commit_info:
+            commit_info["title"] = f"{current_branch} vs {args.branch} " + commit_info.get("title", "")
     elif os.path.isfile(args.source):
         diff_text = read_diff_from_file(args.source)
     else:
