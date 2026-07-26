@@ -460,38 +460,43 @@ def _flatten_tree(node: dict) -> None:
 
 def _render_tree_node(node: dict) -> str:
     """Recursively render tree node to HTML."""
+    items = []
+    for dirname in sorted(node["__dirs__"]):
+        items.append(("dir", dirname, node["__dirs__"][dirname]))
+    for f in sorted(node["__files__"], key=lambda x: x["name"]):
+        items.append(("file", f["name"], f))
     parts = []
-    for dirname in node["__dirs__"]:
-        child = node["__dirs__"][dirname]
-        sub = _render_tree_node(child)
-        display_name = dirname + "/" if "/" in dirname else dirname
-        parts.append(
-            f'<details class="tree-folder" open>'
-            f'<summary class="tree-folder-header">'
-            f'<span class="tree-folder-icon">▾</span>'
-            f'<span class="tree-folder-name">{escape(display_name)}</span>'
-            f'</summary>'
-            f'<div class="tree-folder-contents">'
-            f'{sub}'
-            f'</div>'
-            f'</details>'
-        )
-    for f in node["__files__"]:
-        stats = ""
-        if f["add"] or f["del"]:
-            sp = []
-            if f["add"]:
-                sp.append(f'<span class="add-stat">+{f["add"]}</span>')
-            if f["del"]:
-                sp.append(f'<span class="del-stat">−{f["del"]}</span>')
-            stats = " " + " ".join(sp)
-        parts.append(
-            f'<a class="tree-file" href="#{escape(f["anchor"])}" data-file="{escape(f["anchor"])}">'
-            f'<span class="file-status file-status-{f["status"]}">{f["status"]}</span>'
-            f'<span class="tree-file-name">{escape(f["name"])}</span>'
-            f'<span class="tree-file-stats">{stats}</span>'
-            f'</a>'
-        )
+    for typ, _, data in items:
+        if typ == "dir":
+            child = _render_tree_node(node["__dirs__"][data])
+            display_name = data + "/" if "/" in data else data
+            parts.append(
+                f'<details class="tree-folder" open>'
+                f'<summary class="tree-folder-header">'
+                f'<span class="tree-folder-icon">▾</span>'
+                f'<span class="tree-folder-name">{escape(display_name)}</span>'
+                f'</summary>'
+                f'<div class="tree-folder-contents">'
+                f'{child}'
+                f'</div>'
+                f'</details>'
+            )
+        else:
+            stats = ""
+            if data["add"] or data["del"]:
+                sp = []
+                if data["add"]:
+                    sp.append(f'<span class="add-stat">+{data["add"]}</span>')
+                if data["del"]:
+                    sp.append(f'<span class="del-stat">−{data["del"]}</span>')
+                stats = " " + " ".join(sp)
+            parts.append(
+                f'<a class="tree-file" href="#{escape(data["anchor"])}" data-file="{escape(data["anchor"])}">'
+                f'<span class="file-status file-status-{data["status"]}">{data["status"]}</span>'
+                f'<span class="tree-file-name">{escape(data["name"])}</span>'
+                f'<span class="tree-file-stats">{stats}</span>'
+                f'</a>'
+            )
     return "\n".join(parts)
 
 
@@ -872,6 +877,7 @@ def main():
         sys.exit(1)
 
     files = parse_diff(diff_text)
+    files.sort(key=lambda f: (not "/" in (f.new_path if f.new_path else f.old_path), f.new_path if f.new_path else f.old_path))
 
     if not files:
         print("Warning: no file changes found in diff", file=sys.stderr)
