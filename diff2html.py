@@ -466,10 +466,10 @@ def _render_tree_node(node: dict) -> str:
     for f in sorted(node["__files__"], key=lambda x: x["name"]):
         items.append(("file", f["name"], f))
     parts = []
-    for typ, _, data in items:
+    for typ, name, data in items:
         if typ == "dir":
-            child = _render_tree_node(node["__dirs__"][data])
-            display_name = data + "/" if "/" in data else data
+            child = _render_tree_node(data)
+            display_name = name + "/" if "/" in name else name
             parts.append(
                 f'<details class="tree-folder" open>'
                 f'<summary class="tree-folder-header">'
