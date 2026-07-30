@@ -5,28 +5,31 @@ Generate GitHub-style HTML diff views from git diff output or commit hashes. Eac
 ## Usage
 
 ```bash
-# Use latest commit in current directory, output to diff.html
+# Diff current branch against main/master, output to diff.html
 python diff2html.py
 
-# Specify a commit
-python diff2html.py abc123def
+# Diff current branch against a specific branch
+python diff2html.py -b main
 
-# From a commit hash with custom output
-python diff2html.py ~/my-project abc123def -o review.html
+# Specify a commit (compare commit..HEAD)
+python diff2html.py abc123def
 
 # From a diff file
 python diff2html.py diff.patch
 
 # From stdin
 git diff HEAD~3 HEAD | python diff2html.py --stdin
+
+# Custom output file
+python diff2html.py -o review.html
 ```
 
 ### Options
 
 | Argument | Description |
 |----------|-------------|
-| `repo` | Path to git repository (default: current directory) |
-| `source` | Diff file path, commit hash, or leave empty for `HEAD` |
+| `source` | Commit hash, diff file path, or omit to diff current branch against main/master |
+| `-b, --branch` | Compare current branch against the given branch (e.g. `-b main`) |
 | `-o, --output` | Output HTML file (default: `diff.html`) |
 | `--stdin` | Read diff from stdin |
 
@@ -34,10 +37,11 @@ git diff HEAD~3 HEAD | python diff2html.py --stdin
 
 - **File-based view** — each changed file is a collapsible `<details>` panel with a copy-path button
 - **File list** — summary of all changed files with add/del counts; click to jump
+- **Sidebar tree** — directory tree with file status and stats for quick navigation
 - **Expand / collapse all** — toggle all files at once
-- **Syntax highlighting** — source code in diffs is highlighted via `pygments` (auto-detected from file extension), with GitHub-dark-compatible token colors
-- **GitHub-style dark theme** — inline CSS, no external dependencies
-- **Commit metadata** — shows title, author, date when using a commit hash
+- **Syntax highlighting** — source code in diffs is highlighted via `pygments` (auto-detected from file extension), with GitHub-style token colors
+- **GitHub-style light theme** — inline CSS, no external dependencies
+- **Commit metadata** — shows title, author, date when diffing against a branch or commit
 - **No external runtime dependencies** — pure Python standard library; `pygments` is optional but recommended
 - **WSL support** — auto-detects WSL2 and prints a `file://wsl$/...` URL for Windows browser
 
