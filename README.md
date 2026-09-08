@@ -2,6 +2,14 @@
 
 Generate GitHub-style HTML diff views from git diff output or commit hashes. Each file's diff is shown as a collapsible section with syntax highlighting, making it easy to navigate large changes.
 
+Example:
+
+![](./assets/example.png)
+
+What GitHub shows:
+
+![](./assets/github.png)
+
 ## Usage
 
 ```bash
