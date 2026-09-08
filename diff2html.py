@@ -845,16 +845,21 @@ def main():
             sys.exit(1)
         current_branch = _get_current_branch(repo_dir)
         if args.branch:
-            base = args.branch
-        else:
-            base = _find_base_branch(repo_dir)
-        if base and current_branch != base:
+            # Explicit -b: always diff against it, even if same as current
+            # (same branch -> empty diff, which is correct).
             diff_text = subprocess.run(
-                ["git", "diff", f"{base}..HEAD"],
+                ["git", "diff", f"{args.branch}..HEAD"],
                 capture_output=True, text=True, cwd=repo_dir
             ).stdout
         else:
-            diff_text = get_diff_from_commit(repo_dir, "HEAD")
+            base = _find_base_branch(repo_dir)
+            if base and current_branch != base:
+                diff_text = subprocess.run(
+                    ["git", "diff", f"{base}..HEAD"],
+                    capture_output=True, text=True, cwd=repo_dir
+                ).stdout
+            else:
+                diff_text = get_diff_from_commit(repo_dir, "HEAD")
         commit_info = get_commit_info(repo_dir, "HEAD")
         if args.branch and commit_info:
             commit_info["title"] = f"{current_branch} vs {args.branch} " + commit_info.get("title", "")
