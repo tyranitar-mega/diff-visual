@@ -3,13 +3,14 @@
 diff2html - Generate GitHub-style HTML diff from a git diff.
 
 Usage:
-  python diff2html.py [-o output.html]               diff current branch vs main/master
+  python diff2html.py [-o output.html]               diff current branch vs its gh stack parent or main/master
   python diff2html.py <commit-hash> [-o output.html]  diff a specific commit
   python diff2html.py <diff-file> [-o output.html]    render an existing diff file
   python diff2html.py --stdin [-o output.html]        read diff from stdin
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -815,12 +816,71 @@ def _find_base_branch(repo_dir: str) -> str | None:
     return None
 
 
+def _find_stack_base_branch(repo_dir: str, current_branch: str) -> str | None:
+    """Return the parent branch for the current gh-stack layer, if any."""
+    git_dir_result = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        capture_output=True, text=True, cwd=repo_dir
+    )
+    if git_dir_result.returncode != 0 or not git_dir_result.stdout.strip():
+        return None
+
+    git_dir = Path(git_dir_result.stdout.strip())
+    if not git_dir.is_absolute():
+        git_dir = Path(repo_dir) / git_dir
+    stack_path = git_dir / "gh-stack"
+
+    try:
+        with stack_path.open("r", encoding="utf-8") as f:
+            stack_file = json.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Warning: unable to read gh-stack metadata at {stack_path}: {e}", file=sys.stderr)
+        return None
+
+    if not isinstance(stack_file, dict) or not isinstance(stack_file.get("stacks"), list):
+        print(f"Warning: invalid gh-stack metadata at {stack_path}", file=sys.stderr)
+        return None
+
+    for stack in stack_file["stacks"]:
+        if not isinstance(stack, dict) or not isinstance(stack.get("branches"), list):
+            continue
+
+        branch_names: list[str | None] = [
+            branch.get("branch")
+            if isinstance(branch, dict) and isinstance(branch.get("branch"), str)
+            else None
+            for branch in stack["branches"]
+        ]
+        if current_branch not in branch_names:
+            continue
+
+        index = branch_names.index(current_branch)
+        if index == 0:
+            trunk = stack.get("trunk")
+            base_branch = trunk.get("branch") if isinstance(trunk, dict) else None
+        else:
+            base_branch = branch_names[index - 1]
+
+        if base_branch:
+            return base_branch
+
+        print(
+            f"Warning: gh-stack metadata has no parent for branch {current_branch!r}",
+            file=sys.stderr,
+        )
+        return None
+
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate GitHub-style HTML diff."
     )
     parser.add_argument("source", nargs="?", default=None,
-                        help="Commit hash, diff file path, or omit to diff current branch against main/master")
+                        help="Commit hash, diff file path, or omit to diff current branch against its gh stack parent or main/master")
     parser.add_argument("-b", "--branch", default=None,
                         help="Compare current branch against the given branch (e.g. -b main)")
     parser.add_argument("-o", "--output", default="diff.html",
@@ -852,7 +912,7 @@ def main():
                 capture_output=True, text=True, cwd=repo_dir
             ).stdout
         else:
-            base = _find_base_branch(repo_dir)
+            base = _find_stack_base_branch(repo_dir, current_branch) or _find_base_branch(repo_dir)
             if base and current_branch != base:
                 diff_text = subprocess.run(
                     ["git", "diff", f"{base}..HEAD"],

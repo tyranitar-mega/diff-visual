@@ -13,7 +13,7 @@ What GitHub shows:
 ## Usage
 
 ```bash
-# Diff current branch against main/master, output to diff.html
+# Diff current branch against its gh stack parent, or main/master when not stacked
 python diff2html.py
 
 # Diff current branch against a specific branch
@@ -36,7 +36,7 @@ python diff2html.py -o review.html
 
 | Argument | Description |
 |----------|-------------|
-| `source` | Commit hash, diff file path, or omit to diff current branch against main/master |
+| `source` | Commit hash, diff file path, or omit to diff current branch against its gh stack parent or main/master |
 | `-b, --branch` | Compare current branch against the given branch (e.g. `-b main`) |
 | `-o, --output` | Output HTML file (default: `diff.html`) |
 | `--stdin` | Read diff from stdin |
@@ -50,6 +50,7 @@ python diff2html.py -o review.html
 - **Syntax highlighting** — source code in diffs is highlighted via `pygments` (auto-detected from file extension), with GitHub-style token colors
 - **GitHub-style light theme** — inline CSS, no external dependencies
 - **Commit metadata** — shows title, author, date when diffing against a branch or commit
+- **gh stack support** — automatically compares a stacked branch with the layer immediately below it; explicit `-b/--branch` takes precedence
 - **No external runtime dependencies** — pure Python standard library; `pygments` is optional but recommended
 - **WSL support** — auto-detects WSL2 and prints a `file://wsl$/...` URL for Windows browser
 
