@@ -121,6 +121,13 @@ def parse_diff(text: str) -> list[DiffFile]:
         if line.startswith("rename to "):
             current_file.new_path = line[len("rename to "):]
             continue
+        if line.startswith("copy from "):
+            current_file.status = "copied"
+            current_file.old_path = line[len("copy from "):]
+            continue
+        if line.startswith("copy to "):
+            current_file.new_path = line[len("copy to "):]
+            continue
 
         m = re.match(r"similarity index (\d+)%", line)
         if m:
@@ -180,6 +187,156 @@ def parse_diff(text: str) -> list[DiffFile]:
     _finalize_file(files, current_file, current_hunk)
 
     return files
+
+
+def _file_full_text(df: DiffFile, side: str) -> list[str]:
+    """Reconstruct full file text from a delete/add diff.
+
+    side 'old' collects '-' plus context lines; 'new' collects '+' plus context.
+    """
+    want = ("-", " ") if side == "old" else ("+", " ")
+    lines: list[str] = []
+    for h in df.hunks:
+        for dl in h.lines:
+            if dl.kind in want:
+                lines.append(dl.content)
+    return lines
+
+
+def _is_pure_add(df: DiffFile) -> bool:
+    # Only explicit adds participate in rename detection (like git/GitHub).
+    # A *modified* file with only '+' lines is still a modify, not an add.
+    return df.status == "added"
+
+
+def _is_pure_delete(df: DiffFile) -> bool:
+    # Only explicit deletes participate in rename detection (like git/GitHub).
+    return df.status == "deleted"
+
+
+def _build_hunks_from_unified(unified: list[str]) -> list[Hunk]:
+    """Parse `difflib.unified_diff` output (without ---/+++ headers) into Hunks."""
+    hunks: list[Hunk] = []
+    cur: Hunk | None = None
+    old_ln = 0
+    new_ln = 0
+    for raw in unified:
+        m = re.match(r"^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@(.*)", raw)
+        if m:
+            if cur is not None:
+                hunks.append(cur)
+            old_s = int(m.group(1))
+            old_c = int(m.group(2)) if m.group(2) else 1
+            new_s = int(m.group(3))
+            new_c = int(m.group(4)) if m.group(4) else 1
+            cur = Hunk(old_s, old_c, new_s, new_c, m.group(5).strip())
+            old_ln = old_s
+            new_ln = new_s
+            continue
+        if cur is None:
+            continue
+        if raw.startswith("\\ "):
+            cur.lines.append(DiffLine("\\", raw[1:]))
+        elif raw.startswith("+"):
+            cur.lines.append(DiffLine("+", raw[1:], old_ln=0, new_ln=new_ln))
+            new_ln += 1
+        elif raw.startswith("-"):
+            cur.lines.append(DiffLine("-", raw[1:], old_ln=old_ln, new_ln=0))
+            old_ln += 1
+        elif raw.startswith(" "):
+            cur.lines.append(DiffLine(" ", raw[1:], old_ln=old_ln, new_ln=new_ln))
+            old_ln += 1
+            new_ln += 1
+    if cur is not None:
+        hunks.append(cur)
+    return hunks
+
+
+def reconstruct_renames(files: list[DiffFile], threshold: float = 0.5) -> list[DiffFile]:
+    """Merge delete+add pairs with high content similarity into renames.
+
+    Matches GitHub's behaviour of rendering a rename as a single entry instead
+    of a separate delete (-N) and add (+M). Only applies to diffs that lack
+    rename metadata (e.g. generated with --no-renames); diffs where git already
+    emitted `rename from/to` are left untouched.
+
+    Uses difflib content similarity, mirroring git's default 50% threshold.
+    """
+    import difflib
+
+    dels = [f for f in files if _is_pure_delete(f)]
+    adds = [f for f in files if _is_pure_add(f)]
+    if not dels or not adds:
+        return files
+
+    # Score every candidate pair.
+    scored: list[tuple[float, DiffFile, DiffFile, list[str], list[str]]] = []
+    for d in dels:
+        old_path = d.old_path or d.new_path
+        old_lines = _file_full_text(d, "old")
+        if not old_lines:
+            continue
+        for a in adds:
+            new_path = a.new_path or a.old_path
+            if (old_path and new_path) and old_path == new_path:
+                continue
+            new_lines = _file_full_text(a, "new")
+            if not new_lines:
+                continue
+            ratio = difflib.SequenceMatcher(None, old_lines, new_lines).ratio()
+            if ratio >= threshold:
+                scored.append((ratio, d, a, old_lines, new_lines))
+
+    if not scored:
+        return files
+
+    # Greedy best-first matching; each file merges at most once.
+    scored.sort(key=lambda t: t[0], reverse=True)
+    used: set[int] = set()
+    merged: dict[int, DiffFile] = {}
+    consumed_add: set[int] = set()
+    for ratio, d, a, old_lines, new_lines in scored:
+        if id(d) in used or id(a) in used:
+            continue
+        old_path = d.old_path or d.new_path
+        new_path = a.new_path or a.old_path
+        unified = list(difflib.unified_diff(
+            old_lines, new_lines,
+            fromfile=f"a/{old_path}", tofile=f"b/{new_path}",
+            n=3, lineterm="",
+        ))
+        # Drop the ---/+++ file headers; keep hunk headers + body.
+        body = [ln for ln in unified if not ln.startswith("--- ") and not ln.startswith("+++ ")]
+        hunks = _build_hunks_from_unified(body)
+        if not hunks:
+            continue
+        nf = DiffFile()
+        nf.old_path = old_path
+        nf.new_path = new_path
+        nf.status = "renamed"
+        nf.similarity = int(ratio * 100)
+        nf.hunks = hunks
+        merged[id(d)] = nf
+        used.add(id(d))
+        used.add(id(a))
+        consumed_add.add(id(a))
+
+    if not merged:
+        return files
+
+    out: list[DiffFile] = []
+    emitted_rename: set[int] = set()
+    for f in files:
+        if id(f) in merged:
+            nf = merged[id(f)]
+            if id(nf) not in emitted_rename:
+                out.append(nf)
+                emitted_rename.add(id(nf))
+        elif id(f) in consumed_add:
+            continue  # folded into a rename; skip the standalone add entry
+        else:
+            out.append(f)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -745,13 +902,18 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
 # Git helpers
 # ---------------------------------------------------------------------------
 
+# Git diff commands always enable rename detection so output matches GitHub,
+# even if the user has diff.renames=false in their gitconfig.
+GIT_DIFF_ARGS = ["-c", "diff.renames=true", "diff", "--find-renames"]
+
+
 def get_diff_from_commit(repo_dir: str, commit: str) -> str:
     """Get diff for a commit (compared to parent)."""
     # Check if it's a commit hash or ref
     try:
         # For merge commits, show diff against first parent
         result = subprocess.run(
-            ["git", "diff", f"{commit}^..{commit}"],
+            ["git", *GIT_DIFF_ARGS, f"{commit}^..{commit}"],
             capture_output=True, text=True, cwd=repo_dir
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -759,7 +921,8 @@ def get_diff_from_commit(repo_dir: str, commit: str) -> str:
 
         # Fallback: maybe it's the initial commit
         result = subprocess.run(
-            ["git", "show", "--format=format:%b", commit],
+            ["git", "-c", "diff.renames=true", "show",
+             "--find-renames", "--format=format:%b", commit],
             capture_output=True, text=True, cwd=repo_dir
         )
         return result.stdout
@@ -908,14 +1071,14 @@ def main():
             # Explicit -b: always diff against it, even if same as current
             # (same branch -> empty diff, which is correct).
             diff_text = subprocess.run(
-                ["git", "diff", f"{args.branch}..HEAD"],
+                ["git", *GIT_DIFF_ARGS, f"{args.branch}..HEAD"],
                 capture_output=True, text=True, cwd=repo_dir
             ).stdout
         else:
             base = _find_stack_base_branch(repo_dir, current_branch) or _find_base_branch(repo_dir)
             if base and current_branch != base:
                 diff_text = subprocess.run(
-                    ["git", "diff", f"{base}..HEAD"],
+                    ["git", *GIT_DIFF_ARGS, f"{base}..HEAD"],
                     capture_output=True, text=True, cwd=repo_dir
                 ).stdout
             else:
@@ -930,7 +1093,7 @@ def main():
             print(f"Error: not a git repository: {repo_dir}", file=sys.stderr)
             sys.exit(1)
         diff_text = subprocess.run(
-            ["git", "diff", f"{args.source}..HEAD"],
+            ["git", *GIT_DIFF_ARGS, f"{args.source}..HEAD"],
             capture_output=True, text=True, cwd=repo_dir
         ).stdout
         commit_info = get_commit_info(repo_dir, "HEAD")
@@ -942,6 +1105,10 @@ def main():
         sys.exit(1)
 
     files = parse_diff(diff_text)
+    # Diffs loaded from a file/stdin (or generated with --no-renames) lack
+    # rename headers; fold obvious delete+add pairs back into renames so the
+    # view matches GitHub's rename detection.
+    files = reconstruct_renames(files)
     files.sort(key=lambda f: (not "/" in (f.new_path if f.new_path else f.old_path), f.new_path if f.new_path else f.old_path))
 
     if not files:
