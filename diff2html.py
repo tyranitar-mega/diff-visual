@@ -979,8 +979,48 @@ def _find_base_branch(repo_dir: str) -> str | None:
     return None
 
 
+def _ref_exists(repo_dir: str, ref: str) -> bool:
+    # NOTE: `git rev-parse --verify` alone is not a reliable existence check:
+    # a full-length hex SHA passes verification even when the object is absent.
+    # `git cat-file -e` actually probes the object store.
+    result = subprocess.run(
+        ["git", "cat-file", "-e", ref],
+        capture_output=True, text=True, cwd=repo_dir
+    )
+    return result.returncode == 0
+
+
+def _is_ancestor(repo_dir: str, maybe_ancestor: str, ref: str) -> bool:
+    """True when maybe_ancestor is an ancestor of ref (i.e. ref was built on it)."""
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", maybe_ancestor, ref],
+        capture_output=True, text=True, cwd=repo_dir
+    )
+    return result.returncode == 0
+
+
+def _resolve_stack_base_ref(repo_dir: str, parent_branch: str | None, recorded_base: str | None) -> str | None:
+    """Pick the diff base ref for a gh-stack layer.
+
+    Prefer the live parent branch when the current HEAD was actually built on
+    it; otherwise fall back to the base commit recorded in gh-stack metadata.
+
+    The live ref goes stale when the parent was squash-merged (the local ref
+    still points at the pre-merge commit while HEAD was rebased onto the
+    squash commit on main). Diffing against the stale ref then mixes
+    squash-merge noise into this layer's diff. The recorded base commit is
+    exactly what the layer was stacked on, so it reproduces the GitHub PR view.
+    """
+    if parent_branch and _ref_exists(repo_dir, parent_branch):
+        if _is_ancestor(repo_dir, parent_branch, "HEAD"):
+            return parent_branch
+    if recorded_base and _ref_exists(repo_dir, recorded_base):
+        return recorded_base
+    return parent_branch
+
+
 def _find_stack_base_branch(repo_dir: str, current_branch: str) -> str | None:
-    """Return the parent branch for the current gh-stack layer, if any."""
+    """Return the diff base ref for the current gh-stack layer, if any."""
     git_dir_result = subprocess.run(
         ["git", "rev-parse", "--git-dir"],
         capture_output=True, text=True, cwd=repo_dir
@@ -1020,17 +1060,23 @@ def _find_stack_base_branch(repo_dir: str, current_branch: str) -> str | None:
             continue
 
         index = branch_names.index(current_branch)
+        branches = stack["branches"]
+        recorded_base = None
+        entry = branches[index]
+        if isinstance(entry, dict) and isinstance(entry.get("base"), str):
+            recorded_base = entry.get("base")
         if index == 0:
             trunk = stack.get("trunk")
             base_branch = trunk.get("branch") if isinstance(trunk, dict) else None
         else:
             base_branch = branch_names[index - 1]
 
-        if base_branch:
-            return base_branch
+        base_ref = _resolve_stack_base_ref(repo_dir, base_branch, recorded_base)
+        if base_ref:
+            return base_ref
 
         print(
-            f"Warning: gh-stack metadata has no parent for branch {current_branch!r}",
+            f"Warning: gh-stack metadata has no usable base for branch {current_branch!r}",
             file=sys.stderr,
         )
         return None
