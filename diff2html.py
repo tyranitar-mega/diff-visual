@@ -391,9 +391,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .diff-binary { padding: 24px; text-align: center; color: #656d76; font-size: 14px; }
 
 /* Unified diff table */
-.diff-table-wrapper { overflow-x: auto; }
+.diff-table-wrapper { overflow-x: visible; }
 .diff-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 20px; }
-.diff-table td { padding: 0 8px; vertical-align: top; white-space: pre; font-weight: 500; }
+.diff-table td { padding: 0 8px; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 500; }
 .diff-table .ln { width: 50px; min-width: 50px; text-align: right; padding-right: 10px; color: #6e7781; -webkit-user-select: none; -moz-user-select: none; user-select: none; }
 .diff-table .ln::before { content: attr(data-ln); }
 .diff-table .kind::before { content: attr(data-kind); }

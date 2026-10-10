@@ -48,6 +48,7 @@ python diff2html.py -o review.html
 - **Sidebar tree** — directory tree with file status and stats for quick navigation
 - **Expand / collapse all** — toggle all files at once
 - **Syntax highlighting** — source code in diffs is highlighted via `pygments` (auto-detected from file extension), with GitHub-style token colors
+- **Line wrapping** — long lines wrap inside the row like GitHub (line number stays on the first visual line) instead of scrolling horizontally
 - **GitHub-style light theme** — inline CSS, no external dependencies
 - **Commit metadata** — shows title, author, date when diffing against a branch or commit
 - **gh stack support** — automatically compares a stacked branch with the layer immediately below it; explicit `-b/--branch` takes precedence
