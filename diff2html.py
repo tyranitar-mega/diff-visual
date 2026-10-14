@@ -906,20 +906,27 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
 # even if the user has diff.renames=false in their gitconfig.
 GIT_DIFF_ARGS = ["-c", "diff.renames=true", "diff", "--find-renames"]
 
+# The well-known empty tree object, used as the base for root commits.
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 
 def get_diff_from_commit(repo_dir: str, commit: str) -> str:
-    """Get diff for a commit (compared to parent)."""
+    """Get diff for a commit (compared to parent), including staged changes."""
     # Check if it's a commit hash or ref
     try:
-        # For merge commits, show diff against first parent
+        # Compare the parent against the index so that changes staged on top
+        # of HEAD are included too (unstaged working-tree edits are not).
+        # For merge commits, the parent is the first parent.
+        base = f"{commit}^" if _ref_exists(repo_dir, f"{commit}^") else EMPTY_TREE
         result = subprocess.run(
-            ["git", *GIT_DIFF_ARGS, f"{commit}^..{commit}"],
+            ["git", *GIT_DIFF_ARGS, "--cached", base],
             capture_output=True, text=True, cwd=repo_dir
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout
 
-        # Fallback: maybe it's the initial commit
+        # Fallback: nothing staged against the parent (e.g. an empty commit),
+        # so show the commit itself.
         result = subprocess.run(
             ["git", "-c", "diff.renames=true", "show",
              "--find-renames", "--format=format:%b", commit],
@@ -1115,16 +1122,16 @@ def main():
         current_branch = _get_current_branch(repo_dir)
         if args.branch:
             # Explicit -b: always diff against it, even if same as current
-            # (same branch -> empty diff, which is correct).
+            # (same branch -> only staged changes show up, which is correct).
             diff_text = subprocess.run(
-                ["git", *GIT_DIFF_ARGS, f"{args.branch}..HEAD"],
+                ["git", *GIT_DIFF_ARGS, "--cached", args.branch],
                 capture_output=True, text=True, cwd=repo_dir
             ).stdout
         else:
             base = _find_stack_base_branch(repo_dir, current_branch) or _find_base_branch(repo_dir)
             if base and current_branch != base:
                 diff_text = subprocess.run(
-                    ["git", *GIT_DIFF_ARGS, f"{base}..HEAD"],
+                    ["git", *GIT_DIFF_ARGS, "--cached", base],
                     capture_output=True, text=True, cwd=repo_dir
                 ).stdout
             else:
@@ -1139,7 +1146,7 @@ def main():
             print(f"Error: not a git repository: {repo_dir}", file=sys.stderr)
             sys.exit(1)
         diff_text = subprocess.run(
-            ["git", *GIT_DIFF_ARGS, f"{args.source}..HEAD"],
+            ["git", *GIT_DIFF_ARGS, "--cached", args.source],
             capture_output=True, text=True, cwd=repo_dir
         ).stdout
         commit_info = get_commit_info(repo_dir, "HEAD")
