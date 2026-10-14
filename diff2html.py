@@ -354,11 +354,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .commit-meta { font-size: 12px; color: #656d76; }
 .commit-meta span { margin-right: 16px; }
 
-/* File list */
-.file-list { background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
-.file-list-item { display: flex; align-items: center; padding: 8px 16px; border-bottom: 1px solid #d0d7de; text-decoration: none; color: #1f2328; font-size: 14px; font-weight: 500; }
-.file-list-item:last-child { border-bottom: none; }
-.file-list-item:hover { background: #e8eaed; }
+/* File status / path / stats (shared by sidebar and diff headers) */
 .file-status { display: inline-block; width: 20px; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; font-size: 11px; font-weight: 600; margin-right: 8px; flex-shrink: 0; }
 .file-status-A { background: #2da44e; color: #fff; }
 .file-status-M { background: #9a6700; color: #fff; }
@@ -416,7 +412,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", 
 .line-hunk-header td { color: #656d76; padding: 4px 8px; font-weight: 500; }
 
 /* File diff stats summary */
-.stats-summary { display: flex; align-items: center; padding: 8px 16px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; font-size: 12px; color: #656d76; flex-wrap: wrap; gap: 4px 16px; }
+.stats-summary { display: flex; align-items: center; padding: 10px 16px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 16px; font-size: 13px; color: #656d76; flex-wrap: wrap; gap: 4px 16px; }
 .stats-summary .additions { color: #1a7f37; }
 .stats-summary .deletions { color: #cf222e; }
 
@@ -616,6 +612,20 @@ def _flatten_tree(node: dict) -> None:
             child = sub_child
 
 
+def _flatten_tree_order(node: dict) -> list[str]:
+    """Return file anchors in sidebar display order (dirs first, then root files).
+
+    Mirrors the traversal done by _render_tree_node so the stacked file diffs
+    can be laid out in exactly the same order as the sidebar.
+    """
+    order: list[str] = []
+    for dirname in sorted(node["__dirs__"]):
+        order.extend(_flatten_tree_order(node["__dirs__"][dirname]))
+    for f in sorted(node["__files__"], key=lambda x: x["name"]):
+        order.append(f["anchor"])
+    return order
+
+
 def _render_tree_node(node: dict) -> str:
     """Recursively render tree node to HTML."""
     items = []
@@ -754,7 +764,7 @@ function toggleSidebar() {
   document.getElementById('sidebar-toggle-btn').classList.toggle('hidden');
 }
 document.addEventListener('click', function(e) {
-  var link = e.target.closest('.file-list-item, .tree-file');
+  var link = e.target.closest('.tree-file');
   if (!link) return;
   var href = link.getAttribute('href');
   if (!href || !href.startsWith('#')) return;
@@ -799,33 +809,6 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
     total_add = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "+")
     total_del = sum(1 for f in files for h in f.hunks for l in h.lines if l.kind == "-")
 
-    # Build file list
-    file_list_rows = []
-    for df in files:
-        status = status_char(df.status)
-        path = df.new_path if df.new_path else df.old_path
-        anchor = path.replace("\\", "/")
-        label = path
-        if df.status == "renamed":
-            label = f"{df.old_path} → {df.new_path}"
-        add_c = sum(1 for h in df.hunks for l in h.lines if l.kind == "+")
-        del_c = sum(1 for h in df.hunks for l in h.lines if l.kind == "-")
-        stats = ""
-        if add_c or del_c:
-            sp = []
-            if add_c:
-                sp.append(f'<span class="add-stat">+{add_c}</span>')
-            if del_c:
-                sp.append(f'<span class="del-stat">-{del_c}</span>')
-            stats = " ".join(sp)
-        file_list_rows.append(
-            f'<a class="file-list-item" href="#{escape(anchor)}">'
-            f'<span class="file-status file-status-{status}">{status}</span>'
-            f'<span class="file-path">{escape(label)}</span>'
-            f'<span class="file-stats">{stats}</span>'
-            f'</a>'
-        )
-
     # Commit header
     commit_html = ""
     if commit_info:
@@ -851,20 +834,17 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
             sp.append(f'<span class="deletions">-{total_del} deletions</span>')
         stats_line = f'<div class="stats-summary">{" &nbsp;|&nbsp; ".join(sp)}{toggle_links}</div>'
 
-    file_list_html = ""
-    if file_list_rows:
-        file_list_html = f"""\
-<div class="file-list">
-  {stats_line}
-  {''.join(file_list_rows)}
-</div>"""
-
-    diff_html = "\n".join(render_file(df, repo_dir) for df in files)
-
     # Build sidebar tree
     tree = _build_file_tree(files)
     _flatten_tree(tree)
     tree_html = _render_tree_node(tree)
+
+    # Stack the file diffs in the same order as the sidebar tree
+    sidebar_order = {anchor: i for i, anchor in enumerate(_flatten_tree_order(tree))}
+    files = sorted(files, key=lambda df: sidebar_order.get(
+        (df.new_path or df.old_path).replace("\\", "/"), len(sidebar_order)))
+
+    diff_html = "\n".join(render_file(df, repo_dir) for df in files)
 
     return f"""\
 <!DOCTYPE html>
@@ -876,7 +856,7 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
 <style>{CSS.replace("{token_css}", SYNTAX_CSS)}</style>
 </head>
 <body>
-<aside class="sidebar" id="sidebar">
+<aside class="sidebar open" id="sidebar">
   <div class="sidebar-header">
     <span>Files changed ({len(files)})</span>
     <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
@@ -885,11 +865,11 @@ def generate_html(files: list[DiffFile], repo_dir: str = "", commit_info: dict |
     {tree_html}
   </div>
 </aside>
-<button class="sidebar-toggle-btn" id="sidebar-toggle-btn" onclick="toggleSidebar()">☰ Files</button>
-<div class="main-content" id="main-content">
+<button class="sidebar-toggle-btn hidden" id="sidebar-toggle-btn" onclick="toggleSidebar()">☰ Files</button>
+<div class="main-content shifted" id="main-content">
   <div class="container">
 {commit_html}
-{file_list_html}
+{stats_line}
 {diff_html}
   </div>
 </div>

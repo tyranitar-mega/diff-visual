@@ -45,8 +45,8 @@ python diff2html.py -o review.html
 ## Features
 
 - **File-based view** — each changed file is a collapsible `<details>` panel with a copy-path button
-- **File list** — summary of all changed files with add/del counts; click to jump
-- **Sidebar tree** — directory tree with file status and stats for quick navigation
+- **Stats summary** — `N files changed | +X additions | -Y deletions` above the stacked file diffs, with expand/collapse all
+- **Sidebar tree** — expanded by default; directory tree with file status and stats for quick navigation, stacked diffs follow the same order
 - **Expand / collapse all** — toggle all files at once
 - **Syntax highlighting** — source code in diffs is highlighted via `pygments` (auto-detected from file extension), with GitHub-style token colors
 - **Line wrapping** — long lines wrap inside the row like GitHub (line number stays on the first visual line) instead of scrolling horizontally
