@@ -986,24 +986,30 @@ def _is_ancestor(repo_dir: str, maybe_ancestor: str, ref: str) -> bool:
     return result.returncode == 0
 
 
-def _resolve_stack_base_ref(repo_dir: str, parent_branch: str | None, recorded_base: str | None) -> str | None:
+def _resolve_stack_base_ref(repo_dir: str, candidates: list[str | None]) -> str | None:
     """Pick the diff base ref for a gh-stack layer.
 
-    Prefer the live parent branch when the current HEAD was actually built on
-    it; otherwise fall back to the base commit recorded in gh-stack metadata.
+    Candidates, in order of preference, are the live parent branch, the base
+    commit recorded in gh-stack metadata, and the trunk branch. Each can go
+    stale: the live parent ref still points at its pre-squash commits after the
+    parent was squash-merged, and the recorded base is a snapshot from stack
+    creation time, so a restack onto a newer trunk leaves it behind.
 
-    The live ref goes stale when the parent was squash-merged (the local ref
-    still points at the pre-merge commit while HEAD was rebased onto the
-    squash commit on main). Diffing against the stale ref then mixes
-    squash-merge noise into this layer's diff. The recorded base commit is
-    exactly what the layer was stacked on, so it reproduces the GitHub PR view.
+    Both mistakes widen this layer's diff with changes already present in the
+    base, so instead of trusting a single candidate, take the ancestor of HEAD
+    closest to it: what the layer was last stacked on.
     """
-    if parent_branch and _ref_exists(repo_dir, parent_branch):
-        if _is_ancestor(repo_dir, parent_branch, "HEAD"):
-            return parent_branch
-    if recorded_base and _ref_exists(repo_dir, recorded_base):
-        return recorded_base
-    return parent_branch
+    ancestors = [
+        c for c in dict.fromkeys(candidates)
+        if c and _ref_exists(repo_dir, c) and _is_ancestor(repo_dir, c, "HEAD")
+    ]
+    for c in ancestors:
+        if not any(other != c and _is_ancestor(repo_dir, c, other) for other in ancestors):
+            return c
+    for c in candidates:
+        if c and _ref_exists(repo_dir, c):
+            return c
+    return next((c for c in candidates if c), None)
 
 
 def _find_stack_base_branch(repo_dir: str, current_branch: str) -> str | None:
@@ -1052,13 +1058,14 @@ def _find_stack_base_branch(repo_dir: str, current_branch: str) -> str | None:
         entry = branches[index]
         if isinstance(entry, dict) and isinstance(entry.get("base"), str):
             recorded_base = entry.get("base")
+        trunk = stack.get("trunk")
+        trunk_branch = trunk.get("branch") if isinstance(trunk, dict) else None
         if index == 0:
-            trunk = stack.get("trunk")
-            base_branch = trunk.get("branch") if isinstance(trunk, dict) else None
+            base_branch = trunk_branch
         else:
             base_branch = branch_names[index - 1]
 
-        base_ref = _resolve_stack_base_ref(repo_dir, base_branch, recorded_base)
+        base_ref = _resolve_stack_base_ref(repo_dir, [base_branch, recorded_base, trunk_branch])
         if base_ref:
             return base_ref
 
