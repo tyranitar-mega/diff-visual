@@ -60,4 +60,7 @@ python diff2html.py -o review.html
 ## Requirements
 
 - Python 3.10+
-- `pygments` (optional, for syntax highlighting) — `pip install pygments`
+- `pygments` (optional, for syntax highlighting) — `pip install pygments`. Without it the diff
+  still renders, but the page is plain text and a warning is printed. Homebrew's Python is marked
+  externally managed, so there it takes `python3 -m pip install --break-system-packages pygments`,
+  and the package has to be reinstalled after every `brew upgrade python`.

@@ -1154,6 +1154,10 @@ def main():
     if not files:
         print("Warning: no file changes found in diff", file=sys.stderr)
 
+    if not HAS_PYGMENTS:
+        print("Warning: pygments is not installed; syntax highlighting is disabled "
+              "(pip install pygments)", file=sys.stderr)
+
     html = generate_html(files, repo_dir, commit_info)
 
     with open(args.output, "w", encoding="utf-8") as f:
